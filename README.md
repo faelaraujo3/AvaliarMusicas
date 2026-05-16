@@ -1,6 +1,6 @@
 # CSI606-2026-01 - Remoto - Proposta de Trabalho Final
 
-**Discente:** Rafael Araújo
+**Discente:** Rafael Araújo de Souza
 
 ## Resumo
 O **Scorefy** será uma rede social moderna e interativa dedicada aos apaixonados por música, inspirada em plataformas consolidadas de catalogação como o *RateYourMusic*. O objetivo principal do projeto será permitir que os utilizadores descubram, avaliem, cataloguem álbuns e interajam uns com os outros através de um sistema social completo. A aplicação será planejada com foco em uma arquitetura de microsserviços estruturada com o uso de um Sistema de Gestão de Banco de Dados Não-Relacional (MongoDB), recorrendo estritamente a queries nativas de forma a evidenciar o domínio na manipulação direta de dados.
