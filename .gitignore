@@ -1,0 +1,13 @@
+node_modules
+.env
+# Front-end
+node_modules/
+dist/
+
+# Back-end (Python)
+server/venv/
+__pycache__/
+*.py[cod]
+
+# Docker & Config
+.env

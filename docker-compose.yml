@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  # Container do Banco de Dados (Sobe sozinho, sem precisar do Atlas agora)
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_scorefy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # Container do seu Back-end em Python
+  backend:
+    build: ./server
+    container_name: flask_backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/scorefy_db
+    volumes:
+      - ./server:/app
+
+volumes:
+  mongo_data:
