@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-  # Container do Banco de Dados (Sobe sozinho, sem precisar do Atlas agora)
+  # Container do Banco de Dados
   mongodb:
     image: mongo:latest
     container_name: mongodb_scorefy
@@ -9,7 +9,7 @@ services:
     volumes:
       - mongo_data:/data/db
 
-  # Container do seu Back-end em Python
+  # Container do Back-end em Python
   backend:
     build: ./server
     container_name: flask_backend
