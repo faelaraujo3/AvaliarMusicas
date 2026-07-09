@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Bell, User, Flame, Globe, Sparkles, LogOut, LogIn, UserPlus, Settings, Heart, MessageCircle, SlidersHorizontal, ChevronDown, Users } from 'lucide-react';
 import logoScorefy from '../assets/logoscorefy.png';
 import { useAuth } from '../contexts/AuthContext';
+import { useChat } from '../contexts/ChatContext';
 
 export default function Header({ onSearch, hideSearch, hideNav }) {
   const [inputFocus, setInputFocus] = useState(false);
@@ -18,6 +19,8 @@ export default function Header({ onSearch, hideSearch, hideNav }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { toggleChat, unreadCount: chatUnread } = useChat();
+  const [chatBtnHover, setChatBtnHover] = useState(false);
   
   const menuRef = useRef(null);
   const notifRef = useRef(null);
@@ -248,6 +251,32 @@ export default function Header({ onSearch, hideSearch, hideNav }) {
           </div>
         )}
 
+        {/* === ÍCONE DE CHAT === */}
+        {user && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={toggleChat}
+              onMouseEnter={() => setChatBtnHover(true)}
+              onMouseLeave={() => setChatBtnHover(false)}
+              title="Mensagens"
+              style={{
+                padding: '8px', borderRadius: '50%',
+                backgroundColor: chatBtnHover ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                border: 'none', cursor: 'pointer',
+                color: chatBtnHover ? 'white' : '#9ca3af',
+                position: 'relative', transition: 'all 0.2s',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >
+              {/* Ícone de balão de chat */}
+              <MessageCircle size={20} />
+              {chatUnread > 0 && (
+                <span style={{ position: 'absolute', top: '6px', right: '8px', width: '8px', height: '8px', backgroundColor: '#1d9bf0', borderRadius: '50%', border: '2px solid #121215' }} />
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Notificações */}
         {user && (
           <div style={{ position: 'relative' }} ref={notifRef}>
@@ -284,8 +313,8 @@ export default function Header({ onSearch, hideSearch, hideNav }) {
                 
                 <div className="custom-scrollbar" style={{ overflowY: 'auto', maxHeight: '420px', display: 'flex', flexDirection: 'column', paddingRight: '2px' }}>
                   {notifications.length === 0 ? (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#6b7280', fontSize: '15px' }}>
-                      <Bell size={32} color="#333" style={{ margin: '0 auto 12px auto' }} />
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#6b7280', fontSize: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <Bell size={32} color="#3f3f46" style={{ marginBottom: '12px' }} />
                       Você não tem novas notificações.
                     </div>
                   ) : (

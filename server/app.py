@@ -442,14 +442,28 @@ def obter_secoes_home():
     ]
     melhores_agregados = list(criticas_col.aggregate(pipeline_top))
     
-    uma_semana = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    pipeline_trending = [
-        {"$match": {"data_postagem": {"$gte": uma_semana}}},
-        {"$group": {"_id": "$id_album", "contagem": {"$sum": 1}}},
-        {"$sort": {"contagem": -1}},
-        {"$limit": 8}
-    ]
-    trending_agregados = list(criticas_col.aggregate(pipeline_trending))
+    cutoff_trending = datetime.utcnow() - timedelta(hours=3) - timedelta(days=14)
+    todas_criticas = list(criticas_col.find({}))
+    pontuacoes = {}
+    for c in todas_criticas:
+        id_a = c.get("id_album")
+        if not id_a: continue
+        pts = 0
+        ds = c.get("data_postagem")
+        if ds:
+            try:
+                if datetime.strptime(ds, "%Y-%m-%d %H:%M:%S") >= cutoff_trending: pts += 1
+            except: pass
+        for resp in c.get("respostas", []):
+            drs = resp.get("data")
+            if drs:
+                try:
+                    if datetime.strptime(drs, "%d/%m/%Y %H:%M") >= cutoff_trending: pts += 1
+                except: pass
+        if pts > 0:
+            pontuacoes[id_a] = pontuacoes.get(id_a, 0) + pts
+
+    trending_agregados = [{"_id": k, "contagem": v} for k, v in sorted(pontuacoes.items(), key=lambda item: item[1], reverse=True)[:8]]
 
     novos_lancamentos = list(albuns_col.find({}, {"_id": 0}).sort("year", -1).limit(8))
     for nl in novos_lancamentos:
@@ -511,14 +525,29 @@ def formatar_albuns(lista_ids_ou_docs):
 
 @app.route('/api/lista/em-alta', methods=['GET'])
 def lista_em_alta():
-    uma_semana_atras = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
-    pipeline = [
-        {"$match": {"data_postagem": {"$gte": uma_semana_atras}}},
-        {"$group": {"_id": "$id_album", "contagem": {"$sum": 1}}},
-        {"$sort": {"contagem": -1}},
-        {"$limit": 50} 
-    ]
-    ids = list(criticas_col.aggregate(pipeline))
+    cutoff_trending = datetime.utcnow() - timedelta(hours=3) - timedelta(days=14)
+    todas_criticas = list(criticas_col.find({}))
+    pontuacoes = {}
+    for c in todas_criticas:
+        id_a = c.get("id_album")
+        if not id_a: continue
+        pts = 0
+        ds = c.get("data_postagem")
+        if ds:
+            try:
+                if datetime.strptime(ds, "%Y-%m-%d %H:%M:%S") >= cutoff_trending: pts += 1
+            except: pass
+        for resp in c.get("respostas", []):
+            drs = resp.get("data")
+            if drs:
+                try:
+                    if datetime.strptime(drs, "%d/%m/%Y %H:%M") >= cutoff_trending: pts += 1
+                except: pass
+        if pts > 0:
+            pontuacoes[id_a] = pontuacoes.get(id_a, 0) + pts
+
+    ids = [{"_id": k, "contagem": v} for k, v in sorted(pontuacoes.items(), key=lambda item: item[1], reverse=True)[:50]]
+
     if not ids: 
         fallback = list(albuns_col.find({}, {"_id": 0}).sort("year", -1).limit(20))
         return jsonify(formatar_albuns(fallback))
@@ -845,6 +874,107 @@ def adicionar_album_lista(lista_id):
 def remover_album_lista(lista_id, id_album):
     listas_col.update_one({"_id": ObjectId(lista_id)}, {"$pull": {"albuns": int(id_album)}})
     return jsonify({"message": "Álbum removido da lista!"}), 200
+
+
+# --- SISTEMA DE CHAT ---
+messages_col = db["messages"]
+
+@app.route('/api/chat/conversas/<int:id_user>', methods=['GET'])
+def listar_conversas(id_user):
+    """Lista todas as conversas do usuário, agrupadas pelo outro participante."""
+    todas = list(messages_col.find({
+        "$or": [{"id_remetente": id_user}, {"id_destinatario": id_user}]
+    }).sort("_id", -1))
+
+    # Agrupa pelo outro usuário mantendo a ordem (mais recente primeiro)
+    conversas = {}
+    for msg in todas:
+        outro_id = msg["id_destinatario"] if msg["id_remetente"] == id_user else msg["id_remetente"]
+        if outro_id not in conversas:
+            conversas[outro_id] = {"ultima_msg": msg, "nao_lidas": 0}
+        if not msg.get("lida") and msg["id_destinatario"] == id_user:
+            conversas[outro_id]["nao_lidas"] += 1
+
+    resultado = []
+    for outro_id, conv in conversas.items():
+        outro_user = usuarios_col.find_one({"id_user": outro_id}, {"_id": 0, "senha": 0})
+        if not outro_user:
+            continue
+        msg = conv["ultima_msg"]
+        resultado.append({
+            "usuario": outro_user,
+            "ultima_mensagem": {
+                "_id": str(msg["_id"]),
+                "texto": msg.get("texto", ""),
+                "tipo": msg.get("tipo", "texto"),
+                "data": msg.get("data", ""),
+                "id_remetente": msg["id_remetente"],
+                "lida": msg.get("lida", True)
+            },
+            "nao_lidas": conv["nao_lidas"]
+        })
+
+    return jsonify(resultado), 200
+
+
+@app.route('/api/chat/mensagens/<int:id_user>/<int:id_outro>', methods=['GET'])
+def historico_mensagens(id_user, id_outro):
+    """Retorna o histórico completo de mensagens entre dois usuários."""
+    msgs = list(messages_col.find({
+        "$or": [
+            {"id_remetente": id_user, "id_destinatario": id_outro},
+            {"id_remetente": id_outro, "id_destinatario": id_user}
+        ]
+    }).sort("_id", 1))
+
+    for msg in msgs:
+        msg["_id"] = str(msg["_id"])
+
+    return jsonify(msgs), 200
+
+
+@app.route('/api/chat/mensagens', methods=['POST'])
+def enviar_mensagem():
+    """Envia uma nova mensagem (texto ou álbum recomendado)."""
+    data = request.json
+    id_remetente = data.get("id_remetente")
+    id_destinatario = data.get("id_destinatario")
+    texto = data.get("texto", "")
+    tipo = data.get("tipo", "texto")
+    album = data.get("album", None)
+
+    if not id_remetente or not id_destinatario:
+        return jsonify({"error": "Dados inválidos"}), 400
+
+    nova_msg = {
+        "id_remetente": id_remetente,
+        "id_destinatario": id_destinatario,
+        "texto": texto,
+        "tipo": tipo,
+        "lida": False,
+        "data": (datetime.utcnow() - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
+    }
+    if album:
+        nova_msg["album"] = album
+
+    result = messages_col.insert_one(nova_msg)
+    nova_msg["_id"] = str(result.inserted_id)
+    del nova_msg["_id"]  # Remove para evitar serialização dupla
+
+    inserted = messages_col.find_one({"_id": result.inserted_id})
+    inserted["_id"] = str(inserted["_id"])
+
+    return jsonify(inserted), 201
+
+
+@app.route('/api/chat/mensagens/ler/<int:id_user>/<int:id_outro>', methods=['PATCH'])
+def marcar_mensagens_lidas(id_user, id_outro):
+    """Marca todas as mensagens recebidas de id_outro como lidas."""
+    messages_col.update_many(
+        {"id_remetente": id_outro, "id_destinatario": id_user, "lida": False},
+        {"$set": {"lida": True}}
+    )
+    return jsonify({"status": "sucesso"}), 200
 
 
 if __name__ == '__main__':

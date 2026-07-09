@@ -12,6 +12,8 @@ import logoAddison from '../assets/addisonlogo.png';
 import PinkPantheress from '../assets/pinkpantheress.jpg';
 import ZaraLarsson from '../assets/zarams.jpg';
 import Katseye from '../assets/katseye.jpg';
+import Olivia from '../assets/olivialove.jpg';
+import TituloOlivia from '../assets/olivialogo.webp';
 
 export default function Home({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -99,6 +101,21 @@ export default function Home({ user, onLogout }) {
     {
       id: 2,
       type: 'image',
+      bg: Olivia,
+      badge: 'Novo Lançamento',
+      badgeColor: '#fdcfe8ff',
+      icon: <Music size={12} />,
+      title: 'OLIVIA RODRIGO',
+      titleImage: TituloOlivia,
+      titleColor: '#eebdd0ff',
+      overlay: 'linear-gradient(90deg, #4b90a1ea 10%, #679a9e63 40%, rgba(70, 134, 136, 0) 60%)',
+      desc: 'Olivia Rodrigo transforma as dores do amor em canções intensas, entre vulnerabilidade, raiva e amadurecimento.',
+      btnText: 'Visitar Álbum',
+      path: '/album/67',
+    },
+    {
+      id: 3,
+      type: 'image',
       bg: billieImg,
       badge: 'Álbum em Destaque',
       badgeColor: '#5fc7f0ff',
@@ -111,7 +128,7 @@ export default function Home({ user, onLogout }) {
       path: '/album/45',
     },
     {
-      id: 3,
+      id: 4,
       type: 'image',
       bg: PinkPantheress,
       badge: 'Em Alta',
@@ -125,7 +142,7 @@ export default function Home({ user, onLogout }) {
       path: '/album/67',
     },
     {
-      id: 4,
+      id: 5,
       type: 'image',
       bg: taylorImg,
       badge: 'Lançamento',
@@ -139,7 +156,7 @@ export default function Home({ user, onLogout }) {
       path: '/album/42',
     },
     {
-      id: 5,
+      id: 6,
       type: 'image',
       bg: ZaraLarsson,
       badge: 'Em Alta',
@@ -155,7 +172,7 @@ export default function Home({ user, onLogout }) {
       path: '/album/68',
     },
     {
-      id: 6,
+      id: 7,
       type: 'image',
       bg: addisonImg,
       badge: 'Em Alta',
@@ -169,7 +186,7 @@ export default function Home({ user, onLogout }) {
       path: '/album/48',
     },
     {
-      id: 7,
+      id: 8,
       type: 'image',
       bg: Katseye,
       badge: 'Em Alta',

@@ -10,6 +10,7 @@ import AlbumList from './pages/AlbumList';
 import Settings from './pages/Settings';
 import Feed from './pages/Feed';
 import Playlist from './pages/Playlist';
+import ChatWidget from './components/ChatWidget';
 import './App.css';
 
 function App() {
@@ -113,6 +114,10 @@ function App() {
         
 
       </Routes>
+
+      {/* Widget de chat flutuante — sempre montado, visível em todas as páginas */}
+      <ChatWidget />
+
     </BrowserRouter>
   );
 }
