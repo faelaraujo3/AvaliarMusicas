@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
-import { User, Pencil, MapPin, Search, X, Plus, Star, StarHalf, Check, Trash2, Image as ImageIcon, Users, ListMusic } from 'lucide-react';
+import { User, Pencil, MapPin, Search, X, Plus, Star, StarHalf, Check, Trash2, Image as ImageIcon, Users, ListMusic, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext'; 
+import { useChat } from '../contexts/ChatContext';
 import { useParams, useNavigate } from 'react-router-dom';
 
 export default function Profile() {
   const { identifier } = useParams();
   const { user } = useAuth();
+  const { setPendingChatUser, openChat } = useChat();
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -232,9 +234,14 @@ export default function Profile() {
                 {isEditing ? <><Check size={18} /> Salvar Alterações</> : <><Pencil size={18} /> Editar Perfil</>}
               </button>
             ) : (
-              <button onClick={handleFollowToggle} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 32px', borderRadius: '9999px', backgroundColor: isFollowing ? 'transparent' : 'white', border: isFollowing ? '1px solid rgba(255,255,255,0.3)' : 'none', color: isFollowing ? 'white' : 'black', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', fontSize: '15px' }}>
-                {isFollowing ? 'Deixar de Seguir' : 'Seguir'}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button onClick={() => { openChat(profileData); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', fontSize: '15px' }}>
+                  <MessageCircle size={18} /> Mensagem
+                </button>
+                <button onClick={handleFollowToggle} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 32px', borderRadius: '9999px', backgroundColor: isFollowing ? 'transparent' : 'white', border: isFollowing ? '1px solid rgba(255,255,255,0.3)' : 'none', color: isFollowing ? 'white' : 'black', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', fontSize: '15px' }}>
+                  {isFollowing ? 'Deixar de Seguir' : 'Seguir'}
+                </button>
+              </div>
             )}
           </div>
         </section>

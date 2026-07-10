@@ -10,7 +10,7 @@ export default function Feed() {
   const [feed, setFeed] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchFeed = () => {
     if (user) {
       fetch(`http://localhost:5000/api/feed/${user.id_user}`)
         .then(res => res.json())
@@ -25,7 +25,30 @@ export default function Feed() {
     } else {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchFeed();
   }, [user]);
+
+  const handleLike = (reviewId) => {
+    if (!user) return alert("Faça login para curtir");
+    fetch(`http://localhost:5000/api/reviews/${reviewId}/curtir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_user: user.id_user, username: user.username })
+    }).then(() => fetchFeed());
+  };
+
+  const handleReply = (reviewId, text) => {
+    if (!user) return alert("Faça login para responder");
+    if (!text.trim()) return;
+    fetch(`http://localhost:5000/api/reviews/${reviewId}/responder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_user: user.id_user, username: user.username, texto: text })
+    }).then(() => fetchFeed());
+  };
 
   // Função para renderizar estrelas (ligeiramente maior agora)
   const renderStars = (val) => {
@@ -82,7 +105,7 @@ export default function Feed() {
           /* Lista de Cards do Feed */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {feed.map(item => (
-              <FeedCard key={item._id} item={item} navigate={navigate} renderStars={renderStars} />
+              <FeedCard key={item._id} item={item} navigate={navigate} renderStars={renderStars} currentUser={user} onLike={handleLike} onReply={handleReply} />
             ))}
           </div>
         )}
@@ -94,8 +117,12 @@ export default function Feed() {
 // --- Componentes Auxiliares para manter o código limpo ---
 
 // O novo Card de Review Moderno
-function FeedCard({ item, navigate, renderStars }) {
+function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply }) {
     const [isHovered, setIsHovered] = useState(false);
+    const [showReply, setShowReply] = useState(false);
+    const [replyText, setReplyText] = useState('');
+
+    const isLiked = currentUser && item.curtidas?.includes(currentUser.id_user);
 
     return (
         <div 
@@ -179,9 +206,57 @@ function FeedCard({ item, navigate, renderStars }) {
 
                 {/* Botões de Interação (Feedback Visual) */}
                 <div style={{ display: 'flex', gap: '24px', marginTop: '8px', color: '#71717a' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500' }}><Heart size={18} /> {item.curtidas?.length || 0}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500' }}><MessageCircle size={18} /> {item.respostas?.length || 0}</div>
+                    <div 
+                        onClick={(e) => { e.stopPropagation(); onLike(item._id); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', color: isLiked ? '#ef4444' : '#71717a', transition: 'color 0.2s' }}
+                    >
+                        <Heart size={18} fill={isLiked ? '#ef4444' : 'none'} /> {item.curtidas?.length || 0}
+                    </div>
+                    <div 
+                        onClick={(e) => { e.stopPropagation(); setShowReply(!showReply); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', transition: 'color 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#3b82f6'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#71717a'}
+                    >
+                        <MessageCircle size={18} /> {item.respostas?.length || 0}
+                    </div>
                 </div>
+
+                {showReply && (
+                    <div 
+                        onClick={(e) => e.stopPropagation()} 
+                        style={{ display: 'flex', gap: '12px', marginTop: '4px', alignItems: 'center' }}
+                    >
+                        <input 
+                            autoFocus
+                            type="text" 
+                            placeholder="Adicione um comentário..."
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && replyText.trim()) {
+                                    onReply(item._id, replyText);
+                                    setReplyText('');
+                                    setShowReply(false);
+                                }
+                            }}
+                            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 14px', color: 'white', fontSize: '14px', outline: 'none', transition: 'border-color 0.2s' }}
+                            onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
+                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+                        />
+                        <button 
+                            onClick={() => {
+                                onReply(item._id, replyText);
+                                setReplyText('');
+                                setShowReply(false);
+                            }}
+                            disabled={!replyText.trim()}
+                            style={{ backgroundColor: replyText.trim() ? '#3b82f6' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '12px', padding: '10px 16px', fontWeight: 'bold', cursor: replyText.trim() ? 'pointer' : 'default', transition: 'all 0.2s' }}
+                        >
+                            Enviar
+                        </button>
+                    </div>
+                )}
 
             </div>
         </div>
