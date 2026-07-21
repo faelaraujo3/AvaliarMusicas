@@ -1,22 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
-import { User, Pencil, MapPin, Search, X, Plus, Star, StarHalf, Check, Trash2, Image as ImageIcon, Users, ListMusic, MessageCircle } from 'lucide-react';
+import AlbumCard from '../components/AlbumCard';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { User, Pencil, MapPin, Search, X, Plus, Star, StarHalf, Check, Trash2, Image as ImageIcon, Users, ListMusic, MessageCircle, Sparkles, Music, Play, Pause, Disc } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext'; 
 import { useChat } from '../contexts/ChatContext';
+import { usePlayer } from '../contexts/PlayerContext';
 import { useParams, useNavigate } from 'react-router-dom';
 
 export default function Profile() {
   const { identifier } = useParams();
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const { setPendingChatUser, openChat } = useChat();
+  const { playTrack, isPlaying, activeTrack } = usePlayer();
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [trackSearch, setTrackSearch] = useState('');
+  const [trackSearchResults, setTrackSearchResults] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [profileData, setProfileData] = useState({
     id_user: null, username: '', name: '', bio: '', location: '', imagem_url: 'default_avatar.png',
-    reviews: [], seguidores: [], seguindo: [], listas: []
+    reviews: [], seguidores: [], seguindo: [], listas: [], pinned_track: null
   });
 
   const [networkData, setNetworkData] = useState({ seguidores: [], seguindo: [] });
@@ -40,6 +46,9 @@ export default function Profile() {
   const [createListModalOpen, setCreateListModalOpen] = useState(false);
   const [newListTitle, setNewListTitle] = useState("");
   const [newListDesc, setNewListDesc] = useState("");
+  const [newListType, setNewListType] = useState("album");
+
+  const [userStats, setUserStats] = useState(null);
 
   useEffect(() => { fetchProfile(); }, [identifier, user]);
 
@@ -65,15 +74,23 @@ export default function Profile() {
         setProfileData({
           id_user: data.user.id_user, username: data.user.username, name: data.user.nome || data.user.username,
           bio: data.user.bio || '', location: data.user.localizacao || '', imagem_url: data.user.imagem_url || 'default_avatar.png',
-          reviews: data.reviews || [], seguidores: data.seguidores || [], seguindo: data.seguindo || [], listas: data.listas || []
+          reviews: data.reviews || [], seguidores: data.seguidores || [], seguindo: data.seguindo || [], listas: data.listas || [],
+          pinned_track: data.user.pinned_track || null
         });
         
-        setTempData({ name: data.user.nome || data.user.username, bio: data.user.bio || '', location: data.user.localizacao || '', imagem_url: data.user.imagem_url || 'default_avatar.png' });
+        setTempData({ name: data.user.nome || data.user.username, bio: data.user.bio || '', location: data.user.localizacao || '', imagem_url: data.user.imagem_url || 'default_avatar.png', pinned_track: data.user.pinned_track || null });
 
         const slots = [null, null, null, null, null];
         if (data.favorites) data.favorites.forEach((fav, index) => { if (index < 5) slots[index] = fav; });
         setTopAlbumsSlots(slots);
         fetchNetwork(targetUserId);
+        
+        // Fetch Stats
+        const resStats = await fetch(`http://localhost:5000/api/users/${targetUserId}/stats`);
+        if (resStats.ok) {
+            const statsData = await resStats.json();
+            setUserStats(statsData);
+        }
       }
       setLoading(false);
     } catch (error) { console.error(error); setLoading(false); }
@@ -122,21 +139,25 @@ export default function Profile() {
   };
 
   const handleSaveProfile = async () => {
-    const favoriteIds = topAlbumsSlots.filter(album => album !== null).map(album => album.id_album);
     try {
+      const favoriteIds = topAlbumsSlots.filter(a => a !== null).map(a => a.id_album);
       const res = await fetch(`http://localhost:5000/api/users/${user.id_user}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: tempData.name, bio: tempData.bio, localizacao: tempData.location, imagem_url: tempData.imagem_url, albuns_favoritos: favoriteIds })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: tempData.name, bio: tempData.bio, localizacao: tempData.location, imagem_url: tempData.imagem_url, albuns_favoritos: favoriteIds, pinned_track: tempData.pinned_track })
       });
       if (res.ok) {
-        setProfileData(prev => ({ ...prev, name: tempData.name, bio: tempData.bio, location: tempData.location, imagem_url: tempData.imagem_url }));
+        setProfileData(prev => ({ ...prev, name: tempData.name, bio: tempData.bio, location: tempData.location, imagem_url: tempData.imagem_url, pinned_track: tempData.pinned_track }));
+        if (user && user.id_user === Number(identifier)) {
+           login({ ...user, nome: tempData.name, imagem_url: tempData.imagem_url });
+        }
         setIsEditing(false);
       } else { alert("Erro ao salvar perfil"); }
     } catch (e) { alert("Erro de conexão"); }
   };
 
   const handleStartEditing = () => {
-    setTempData({ name: profileData.name, bio: profileData.bio, location: profileData.location, imagem_url: profileData.imagem_url });
+    setTempData({ name: profileData.name, bio: profileData.bio, location: profileData.location, imagem_url: profileData.imagem_url, pinned_track: profileData.pinned_track });
     setIsEditing(true);
   };
 
@@ -145,9 +166,9 @@ export default function Profile() {
     try {
         await fetch(`http://localhost:5000/api/users/${user.id_user}/listas`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ titulo: newListTitle, descricao: newListDesc })
+            body: JSON.stringify({ titulo: newListTitle, descricao: newListDesc, tipo: newListType })
         });
-        setCreateListModalOpen(false); setNewListTitle(""); setNewListDesc(""); fetchProfile();
+        setCreateListModalOpen(false); setNewListTitle(""); setNewListDesc(""); setNewListType("album"); fetchProfile();
     } catch (e) { console.error(e); }
   };
 
@@ -166,6 +187,15 @@ export default function Profile() {
     return () => clearTimeout(timer);
   }, [modalSearch]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (trackSearch.length > 2) {
+        fetch(`http://localhost:5000/api/busca/faixas?q=${encodeURIComponent(trackSearch)}`).then(res => res.json()).then(data => setTrackSearchResults(data || []));
+      } else { setTrackSearchResults([]); }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [trackSearch]);
+
   const removeTopAlbum = (e, index) => {
     e.stopPropagation();
     const newSlots = [...topAlbumsSlots]; newSlots[index] = null;
@@ -180,7 +210,7 @@ export default function Profile() {
   };
 
   if (!user && !identifier) return <div style={{ color: 'white', padding: 40, textAlign: 'center' }}>Faça login para ver seu perfil.</div>;
-  if (loading) return <div style={{ color: 'white', padding: 40, textAlign: 'center' }}>Carregando...</div>;
+  if (loading) return <LoadingSpinner />;
   if (!profileData.id_user) return <div style={{ color: 'white', padding: 40, textAlign: 'center' }}>Usuário não encontrado.</div>;
 
   const currentAvatar = isEditing ? tempData.imagem_url : profileData.imagem_url;
@@ -210,20 +240,82 @@ export default function Profile() {
                 <>
                   <div>
                     <h1 style={{ fontSize: '38px', fontWeight: '900', margin: 0, letterSpacing: '-0.02em' }}>{profileData.name}</h1>
-                    <span style={{ fontSize: '15px', color: '#9ca3af', fontWeight: '500' }}>@{profileData.username}</span>
+                    <span style={{ fontSize: '15px', color: '#9ca3af', fontWeight: '500', display: 'block', marginTop: '4px' }}>@{profileData.username}</span>
+                      
+                    {profileData.pinned_track && (
+                      <div 
+                        onClick={() => playTrack(profileData.pinned_track)}
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px',
+                          background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', 
+                          borderRadius: '100px', padding: '4px 12px 4px 4px', width: 'fit-content',
+                          cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(10px)'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                        onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                        title="Música Fixada"
+                      >
+                        <img src={profileData.pinned_track.album?.image} style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }} alt="Música Fixada" />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'white', lineHeight: '1.1' }}>{profileData.pinned_track.title}</span>
+                          <span style={{ fontSize: '10px', color: '#9ca3af', lineHeight: '1.1' }}>{profileData.pinned_track.artist}</span>
+                        </div>
+                        <div style={{ marginLeft: '4px', background: 'white', borderRadius: '50%', width: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                           {isPlaying && activeTrack?.id === profileData.pinned_track.id ? <Pause size={10} fill="black" color="black" /> : <Play size={10} fill="black" color="black" style={{ marginLeft: '2px' }} />}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '24px', alignItems: 'center', marginTop: '4px' }}>
                       <span onClick={() => setNetworkModalType('seguindo')} style={{ cursor: 'pointer', fontSize: '15px', color: '#d1d5db', transition: 'color 0.2s' }}><strong style={{ color: 'white', fontSize: '18px' }}>{networkData.seguindo?.length || 0}</strong> Seguindo</span>
                       <span onClick={() => setNetworkModalType('seguidores')} style={{ cursor: 'pointer', fontSize: '15px', color: '#d1d5db', transition: 'color 0.2s' }}><strong style={{ color: 'white', fontSize: '18px' }}>{networkData.seguidores?.length || 0}</strong> Seguidores</span>
                   </div>
-                  {profileData.bio ? <p style={{ color: '#d1d5db', lineHeight: '1.6', margin: 0, fontSize: '15px' }}>{profileData.bio}</p> : <p style={{ color: '#6b7280', fontStyle: 'italic', margin: 0 }}></p>}
-                  {profileData.location && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af', fontSize: '14px', marginTop: '4px' }}><MapPin size={16} /> {profileData.location}</div>}
+                  
+                  {profileData.bio && <p style={{ color: '#d1d5db', lineHeight: '1.5', margin: '16px 0 4px 0', fontSize: '14px' }}>{profileData.bio}</p>}
+                  {profileData.location && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#9ca3af', fontSize: '14px', margin: profileData.bio ? '0' : '16px 0 0 0' }}><MapPin size={16} /> {profileData.location}</div>}
                 </>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                   <input value={tempData.name} onChange={e => setTempData({...tempData, name: e.target.value})} placeholder="Seu nome" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '12px 16px', color: 'white', fontSize: '20px', fontWeight:'bold', outline: 'none' }} />
                   <textarea value={tempData.bio} onChange={e => setTempData({...tempData, bio: e.target.value})} placeholder="Escreva algo sobre você..." rows={3} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '12px 16px', color: 'white', fontSize: '15px', resize: 'none', outline: 'none', fontFamily: 'inherit' }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 16px' }}><MapPin size={18} color="#9ca3af" /><input value={tempData.location} onChange={e => setTempData({...tempData, location: e.target.value})} placeholder="Sua localização" style={{ background: 'transparent', border: 'none', color: 'white', width: '100%', outline: 'none', fontSize: '15px' }} /></div>
+                  
+                  <div style={{ marginTop: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '16px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><Music size={16} color="#3b82f6" /> Fixar uma Música</div>
+                    
+                    {tempData.pinned_track ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '100px', padding: '6px 16px 6px 6px', width: 'fit-content' }}>
+                        <img src={tempData.pinned_track.album?.image} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} alt="Pinned" />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'white' }}>{tempData.pinned_track.title}</span>
+                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>{tempData.pinned_track.artist}</span>
+                        </div>
+                        <button onClick={() => setTempData({...tempData, pinned_track: null})} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px', marginLeft: '8px' }} title="Remover">
+                           <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '10px 16px' }}>
+                          <Search size={16} color="#9ca3af" />
+                          <input value={trackSearch} onChange={e => setTrackSearch(e.target.value)} placeholder="Pesquisar música para fixar..." style={{ background: 'transparent', border: 'none', color: 'white', width: '100%', outline: 'none', fontSize: '14px' }} />
+                        </div>
+                        {trackSearchResults.length > 0 && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#1f1f23', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', marginTop: '4px', maxHeight: '200px', overflowY: 'auto', zIndex: 50, boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                            {trackSearchResults.map(track => (
+                              <div key={track.id} onClick={() => { setTempData({...tempData, pinned_track: track}); setTrackSearch(''); setTrackSearchResults([]); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }} onMouseOver={e => e.currentTarget.style.background='rgba(255,255,255,0.05)'} onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                                <img src={track.album?.image} style={{ width: '32px', height: '32px', borderRadius: '4px' }} alt="Track" />
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 'bold' }}>{track.title}</span>
+                                  <span style={{ fontSize: '11px', color: '#9ca3af' }}>{track.artist}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -311,20 +403,23 @@ export default function Profile() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '24px' }}>
                     {profileData.listas.map(lista => {
                         const imgs = [...(lista.capas || []), null, null, null, null].slice(0, 4);
+                        const isTrackList = lista.tipo === 'faixa';
+                        const itemCount = isTrackList ? (lista.faixas?.length || 0) : (lista.albuns?.length || 0);
+                        const itemLabel = isTrackList ? (itemCount === 1 ? 'música' : 'músicas') : (itemCount === 1 ? 'álbum' : 'álbuns');
                         
                         return (
                             <div 
                                 key={lista._id} 
-                                onClick={() => navigate(`/playlist/${lista._id}`)} // NAVEGAÇÃO PARA NOVA ROTA AQUI
+                                onClick={() => navigate(`/playlist/${lista._id}`)}
                                 style={{ display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer' }}
                             >
-                                {/* O Grid 2x2 ou Capa Personalizada */}
                                 <div style={{ 
                                     aspectRatio: '1/1', borderRadius: '16px', overflow: 'hidden', 
                                     display: lista.capa_personalizada ? 'block' : 'grid', 
                                     gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: '2px',
                                     backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)',
-                                    boxShadow: '0 10px 20px rgba(0,0,0,0.3)', transition: 'transform 0.2s'
+                                    boxShadow: '0 10px 20px rgba(0,0,0,0.3)', transition: 'transform 0.2s',
+                                    position: 'relative'
                                 }}
                                 onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'}
                                 onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -342,7 +437,7 @@ export default function Profile() {
                                 {/* Título da Lista */}
                                 <div>
                                     <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 'bold', color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lista.titulo}</h3>
-                                    <p style={{ margin: 0, fontSize: '13px', color: '#9ca3af' }}>{lista.albuns?.length || 0} álbuns</p>
+                                    <p style={{ margin: 0, fontSize: '13px', color: '#9ca3af' }}>{itemCount} {itemLabel}</p>
                                 </div>
                             </div>
                         )
@@ -350,6 +445,69 @@ export default function Profile() {
                 </div>
             )}
           </section>
+        )}
+
+        {/* --- STATS SECTION --- */}
+        {userStats && (
+            <section style={{ marginBottom: '60px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                    <h2 style={{ fontSize: '22px', fontWeight: '800', margin: 0 }}>Estatísticas Musicais</h2>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+                    {/* Card 1: Total Albums */}
+                    <div style={{ padding: '24px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                        <span style={{ color: '#9ca3af', fontSize: '14px', fontWeight: 'bold' }}>Álbuns Avaliados</span>
+                        <span style={{ color: 'white', fontSize: '32px', fontWeight: '900' }}>{userStats.total_albums}</span>
+                    </div>
+
+                    {/* Card 2: Average Rating */}
+                    <div style={{ padding: '24px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                        <span style={{ color: '#9ca3af', fontSize: '14px', fontWeight: 'bold' }}>Média de Notas (Álbuns)</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: 'white', fontSize: '32px', fontWeight: '900' }}>{userStats.avg_album_rating.toFixed(1)}</span>
+                            <Star fill="#3b82f6" color="#3b82f6" size={24} />
+                        </div>
+                    </div>
+
+                    {/* Card 3: Top Artist */}
+                    <div style={{ padding: '24px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                        <span style={{ color: '#9ca3af', fontSize: '14px', fontWeight: 'bold' }}>Artista Mais Avaliado</span>
+                        <span style={{ color: '#3b82f6', fontSize: '24px', fontWeight: '900', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userStats.top_artist}</span>
+                    </div>
+                    
+                    {/* Card 4: Faixas Avaliadas */}
+                    <div style={{ padding: '24px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '8px', transition: 'transform 0.2s', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+                        <span style={{ color: '#9ca3af', fontSize: '14px', fontWeight: 'bold' }}>Faixas Avaliadas</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: 'white', fontSize: '32px', fontWeight: '900' }}>{userStats.total_tracks}</span>
+                            <Music size={24} color="#a1a1aa" />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Gráfico de Distribuição */}
+                <div style={{ padding: '32px', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <h3 style={{ margin: '0 0 24px 0', fontSize: '16px', color: '#9ca3af' }}>Curva de Notas (Álbuns)</h3>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', height: '140px', justifyContent: 'space-between' }}>
+                        {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(nota => {
+                            const keyStr = Number.isInteger(nota) ? nota.toFixed(1) : nota.toString();
+                            const count = userStats.rating_distribution[keyStr] || 0;
+                            const maxCount = Math.max(...Object.values(userStats.rating_distribution).map(Number)) || 1;
+                            const heightPercent = maxCount === 0 ? 0 : (count / maxCount) * 100;
+                            
+                            return (
+                                <div key={nota} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', group: 'true' }}>
+                                    <div style={{ width: '100%', height: '100px', display: 'flex', alignItems: 'flex-end', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
+                                        <div style={{ width: '100%', height: `${heightPercent}%`, backgroundColor: count > 0 ? '#3b82f6' : 'transparent', transition: 'height 1s ease-out', borderTopLeftRadius: '8px', borderTopRightRadius: '8px' }} />
+                                    </div>
+                                    <span style={{ fontSize: '12px', color: '#9ca3af', fontWeight: 'bold' }}>{nota}</span>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            </section>
         )}
 
         <div style={{ width: '100%', height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
@@ -476,8 +634,19 @@ export default function Profile() {
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div>
+                        <label style={{ fontSize: '13px', color: '#9ca3af', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>Tipo de Lista</label>
+                        <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '6px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <button onClick={() => setNewListType('album')} style={{ flex: 1, padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', transition: 'all 0.2s', backgroundColor: newListType === 'album' ? 'rgba(255,255,255,0.1)' : 'transparent', color: newListType === 'album' ? 'white' : '#9ca3af', boxShadow: newListType === 'album' ? '0 4px 12px rgba(0,0,0,0.2)' : 'none' }}>
+                                Álbuns
+                            </button>
+                            <button onClick={() => setNewListType('faixa')} style={{ flex: 1, padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', transition: 'all 0.2s', backgroundColor: newListType === 'faixa' ? 'rgba(255,255,255,0.1)' : 'transparent', color: newListType === 'faixa' ? 'white' : '#9ca3af', boxShadow: newListType === 'faixa' ? '0 4px 12px rgba(0,0,0,0.2)' : 'none' }}>
+                                Músicas
+                            </button>
+                        </div>
+                    </div>
+                    <div>
                         <label style={{ fontSize: '13px', color: '#9ca3af', fontWeight: 'bold' }}>Título da Lista</label>
-                        <input autoFocus value={newListTitle} onChange={e => setNewListTitle(e.target.value)} placeholder="Ex: Meus Álbuns de Rock Favoritos" style={{ width: '100%', marginTop: '6px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '14px 16px', color: 'white', outline: 'none', fontSize: '15px', boxSizing: 'border-box' }} />
+                        <input autoFocus value={newListTitle} onChange={e => setNewListTitle(e.target.value)} placeholder={newListType === 'album' ? "Ex: Meus Álbuns de Rock Favoritos" : "Ex: Minhas Músicas Favoritas"} style={{ width: '100%', marginTop: '6px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '14px 16px', color: 'white', outline: 'none', fontSize: '15px', boxSizing: 'border-box' }} />
                     </div>
                     <div>
                         <label style={{ fontSize: '13px', color: '#9ca3af', fontWeight: 'bold' }}>Descrição (Opcional)</label>

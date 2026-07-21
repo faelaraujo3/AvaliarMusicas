@@ -1,31 +1,50 @@
-# CSI606-2026-01 - Remoto - Proposta de Trabalho Final
+# Scorefy - Rede Social de Avaliação Musical
 
 **Discente:** Rafael Araújo de Souza
 
-## Resumo
-O **Scorefy** será uma rede social moderna e interativa dedicada aos apaixonados por música, inspirada em plataformas consolidadas de catalogação como o *RateYourMusic*. O objetivo principal do projeto será permitir que os utilizadores descubram, avaliem, cataloguem álbuns e interajam uns com os outros através de um sistema social completo. A aplicação será planejada com foco em uma arquitetura de microsserviços estruturada com o uso de um Sistema de Gestão de Banco de Dados Não-Relacional (MongoDB), recorrendo estritamente a queries nativas de forma a evidenciar o domínio na manipulação direta de dados.
+## 🎵 Sobre o Projeto
+O **Scorefy** é uma plataforma web moderna e interativa desenvolvida para a comunidade de fãs de música. Inspirado no formato de plataformas consolidadas como o *Letterboxd*, o Scorefy atua como uma rede social focada em música onde os usuários podem catalogar, avaliar e debater sobre seus álbuns, EPs e singles favoritos.
 
-## 1. Tema
-O trabalho final terá como tema o desenvolvimento de uma plataforma web voltada para a catalogação musical e interações em comunidade, focando na aplicação prática de consultas nativas e pipelines de agregação avançados sobre um banco de dados NoSQL.
+Ao contrário do que foi previsto na proposta inicial, o sistema não depende exclusivamente de dados manuais para seu funcionamento. O grande diferencial técnico é a **integração nativa em tempo real com a API Pública do Deezer**, permitindo que todo o acervo mundial de artistas e lançamentos esteja instantaneamente disponível na plataforma.
 
-## 2. Escopo
-Este projeto terá como meta a implementação das seguintes funcionalidades:
-* **Rede Social e Perfis Personalizáveis:** Criação de perfis contendo informações customizadas pelo usuário (como biografia e localização), além de um sistema de conexões projetado para alimentar uma timeline dinâmica com as atividades e atualizações mais recentes dos usuários seguidos.
-* **Avaliações e Críticas (Reviews):** Desenvolvimento de uma seção para avaliação detalhada de álbuns por meio de notas quantitativas e resenhas textuais. O sistema preverá interações sociais nessas postagens, tais como curtidas e respostas estruturadas com suporte a menções diretas a outros membros da plataforma.
-* **Central de Notificações:** Alertas estruturados para atualizar os usuários em tempo real sobre novas interações na rede, como novos seguidores, reações em suas críticas e menções em comentários.
-* **Listas Customizadas (Playlists de Álbuns):** Criação e organização de coleções personalizadas de álbuns, permitindo o agrupamento temático de mídias de forma fluida. O sistema contará com recursos visuais dinâmicos para a identificação das listas, baseando-se nos elementos inclusos ou por meio de referências externas.
-* **Busca Global Dinâmica e Agregações:** Mecanismos de pesquisa robustos para encontrar álbuns, artistas e usuários utilizando múltiplos filtros combinados. Pipelines de agregação do MongoDB serão propostos para processar o volume de interações e gerar seções dinâmicas automaticamente, como tendências da comunidade e os itens mais recomendados do período.
+## 🚀 Funcionalidades Atuais
 
-## 3. Restrições
-Para delimitar o desenvolvimento do trabalho, serão consideradas as seguintes restrições:
-* **Zero ORM:** Toda a comunicação técnica com o banco de dados MongoDB deverá obrigatoriamente ser construída de forma direta pelo driver nativo `pymongo`, vetando o uso de frameworks de mapeamento de objetos.
-* **Sem Streaming ou Reprodução de Áudio:** O escopo do projeto focará apenas nos aspectos sociais e de catalogação de dados musicais, não contemplando tocadores internos de música ou transmissão de áudio.
-* **Independência de APIs de Streaming:** Toda a massa de dados referentes a artistas e álbuns será cadastrada e gerenciada localmente nas coleções planejadas para o banco de dados, sem sincronização externa de reprodutores de terceiros.
+* **Busca Global em Tempo Real:** Sistema de pesquisa inteligente integrado ao banco de dados do Deezer que permite pesquisar artistas, faixas e álbuns. Além disso, conta com Filtros de Pesquisa por Ano de Lançamento.
+* **Sistema Avançado de Avaliações (Reviews):** 
+  * Notas gerais para os álbuns (escala de até 5 estrelas).
+  * Notas exclusivas e detalhadas para **cada faixa** individual do álbum.
+  * Resenhas em formato de texto rico, com suporte nativo a **GIFs** e imagens diretamente no corpo do comentário.
+* **Rede Social Integrada:**
+  * **Feed de Atividades Global:** Uma *timeline* dinâmica que reúne as avaliações mais recentes de toda a comunidade.
+  * **Threads de Discussão:** As avaliações de outros usuários podem ser respondidas de forma alinhada, criando *threads* (fóruns) diretos sobre a opinião de um disco.
+  * **Interações:** Sistema de curtidas nas críticas (likes).
+* **Perfis e Conexões:** 
+  * Perfis de usuário customizáveis com fotos e biografias.
+  * Sistema de "Seguidores" e "Seguindo".
+* **Central de Notificações Inteligente:** O usuário é alertado de forma contextual sempre que alguém interage com seu perfil, curte sua resenha ou responde ao seu comentário, tudo gerenciado por preferências do usuário.
 
-## 4. Protótipo
-Os protótipos de tela para a interface do sistema (incluindo as páginas de Login, Feed de Atividades, Perfil, Exibição de Álbuns e Criação de Listas) estão sendo cosntruídos localmente e atualizarei neste repositório.
+## 🛠️ Tecnologias Utilizadas
 
-## 5. Referências
-* MONGODB. *MongoDB Documentation: Aggregation Operations*. Disponível em: <https://www.mongodb.com/docs/manual/aggregation/>.
-* PALLETS PROJECTS. *Flask Documentation (v3.0.x)*. Disponível em: <https://flask.palletsprojects.com/>.
-* REACT. *React Documentation: Quick Start*. Disponível em: <https://react.dev/>.
+A arquitetura do Scorefy foi dividida e construída com foco em desempenho, integração de APIs e escalabilidade:
+
+### Front-end
+* **React JS**: Biblioteca principal para a criação das interfaces de usuário responsivas e baseadas em componentes.
+* **Vite**: Ferramenta de *build* moderna utilizada para garantir um desenvolvimento super rápido e empacotamento otimizado.
+* **Design e UI/UX**: Interface Premium, focada no estilo *Glassmorphism* (efeitos de vidro translúcidos), *Dark Mode* vibrante, tipografias modernas, e animações/micro-interações projetadas para máximo engajamento e beleza estética.
+
+### Back-end
+* **Python**: Linguagem principal do servidor.
+* **Flask**: Framework *micro-web* responsável por fornecer as rotas (REST API) que o Front-end consome.
+* **Integração Externa (Deezer API)**: Comunicação síncrona via HTTP para buscar catálogo fonográfico oficial de forma automatizada e em tempo real, armazenando esses dados no banco local por mecanismo de cache.
+* **Docker**: Containerização do ecossistema do servidor.
+
+### Banco de Dados
+* **MongoDB (NoSQL)**: O banco principal da aplicação, utilizando o driver oficial `pymongo`. O projeto cumpre o desafio de usar consultas e agregações puras no banco de dados não-relacional, eliminando completamente a dependência de frameworks ORM.
+
+## 🔮 O que vem por aí (Próximos Passos)
+O sistema está em contínua evolução. Entre as próximas funcionalidades planejadas, destacam-se:
+* **Listening Diary (Diário de Escutas):** Um espaço no perfil para acompanhar e catalogar cronologicamente o que o usuário está ouvindo mês a mês.
+* **Playlists/Listas Customizadas:** Uma ferramenta para o usuário criar ranqueamentos pessoais, como "Top 10 Álbuns do Ano", e compartilhar com a comunidade.
+
+---
+*Projeto desenvolvido para a disciplina CSI606-2026-01 (Trabalho Final).*

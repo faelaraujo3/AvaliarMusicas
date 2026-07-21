@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import AlbumCard from '../components/AlbumCard';
-import { ArrowRight, Sparkles, Disc, Music, User, Search } from 'lucide-react';
+import { ArrowRight, Sparkles, Disc, Music, User, Search, Play, Pause } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { usePlayer } from '../contexts/PlayerContext';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 // Imagens estáticas do banner (mantidas conforme seu design)
 import billieImg from '../assets/Billie.jpg';
@@ -13,11 +15,13 @@ import PinkPantheress from '../assets/pinkpantheress.jpg';
 import ZaraLarsson from '../assets/zarams.jpg';
 import Katseye from '../assets/katseye.jpg';
 import Olivia from '../assets/olivialove.jpg';
-import TituloOlivia from '../assets/olivialogo.webp';
+import TituloOlivia from '../assets/olivialogo.webp'
+import BadBunny from '../assets/badbunny.jpg';
+import DebiLogo from '../assets/debiLogo.webp';
 
 export default function Home({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [sections, setSections] = useState({ trending: [], top_rated: [], new_releases: [] });
+  const [sections, setSections] = useState({ trending: [], top_rated: [], new_releases: [], trending_singles: [], top_tracks: [] });
 
   // Estados para dados reais do Backend
   const [albums, setAlbums] = useState([]);
@@ -45,7 +49,9 @@ export default function Home({ user, onLogout }) {
         setSections({
           trending: format(data.trending),
           top_rated: format(data.top_rated),
-          new_releases: format(data.new_releases)
+          new_releases: format(data.new_releases),
+          trending_singles: format(data.trending_singles || []),
+          top_tracks: data.top_tracks || []
         });
 
         // Mantém a compatibilidade com a sua variável safeAlbums caso precise
@@ -111,10 +117,26 @@ export default function Home({ user, onLogout }) {
       overlay: 'linear-gradient(90deg, #66adbeea 10%, #679a9e63 40%, rgba(70, 134, 136, 0) 60%)',
       desc: 'Olivia Rodrigo transforma as dores do amor em canções intensas, entre vulnerabilidade, raiva e amadurecimento.',
       btnText: 'Visitar Álbum',
-      path: '/album/67',
+      path: '/album/1002561451',
     },
-    {
+        {
       id: 3,
+      type: 'image',
+      bg: BadBunny,
+      badge: 'Álbum em Destaque',
+      badgeColor: '#ffcd70ff',
+      icon: <Disc size={12} />,
+      title: 'Debi Tirar Mas Fotos',
+      titleImage: DebiLogo,
+      titleColor: '#fde194ff',
+      overlay: 'linear-gradient(90deg, #965131ff 10%, #a3603aaa 40%, rgba(212, 152, 22, 0) 60%)',
+      desc: 'O último vencedor de álbum do ano na premiação mais prestigiada da música.',
+      btnText: 'Visitar Álbum',
+      path: '/album/693008911',
+    },
+
+    {
+      id: 4,
       type: 'image',
       bg: billieImg,
       badge: 'Álbum em Destaque',
@@ -125,10 +147,10 @@ export default function Home({ user, onLogout }) {
       overlay: 'linear-gradient(90deg, #0e5f94ff 0%, #11528faa 40%, rgba(11, 83, 131, 0) 60%)',
       desc: 'Confira as avaliações do álbum eleito como "Melhor da Década" pelos nossos usuários.',
       btnText: 'Visitar Álbum',
-      path: '/album/45',
+      path: '/album/586786102',
     },
     {
-      id: 4,
+      id: 5,
       type: 'image',
       bg: PinkPantheress,
       badge: 'Em Alta',
@@ -139,21 +161,7 @@ export default function Home({ user, onLogout }) {
       overlay: 'linear-gradient(90deg, #a50909ff 10%, #b824119d 30%, rgba(143, 11, 11, 0) 70%)',
       desc: 'É altamente ilegal ignorar esse álbum.',
       btnText: 'Visitar Álbum',
-      path: '/album/67',
-    },
-    {
-      id: 5,
-      type: 'image',
-      bg: taylorImg,
-      badge: 'Lançamento',
-      badgeColor: '#fde68a',
-      icon: <Music size={12} />,
-      title: 'THE LIFE OF A SHOWGIRL',
-      titleColor: '#f8dfb0ff',
-      overlay: 'linear-gradient(90deg, #793322ff 10%, #86352aaa 40%, rgba(92, 39, 10, 0) 80%)',
-      desc: 'Confira as reações mistas da comunidade ao lançamento mais recente de Taylor Swift.',
-      btnText: 'Visitar Álbum',
-      path: '/album/42',
+      path: '/album/749411161',
     },
     {
       id: 6,
@@ -169,10 +177,24 @@ export default function Home({ user, onLogout }) {
       overlay: 'linear-gradient(90deg, #0190b4ea 10%, #2dbfca63 40%, rgba(11, 139, 143, 0) 60%)',
       desc: 'Zara Larsson traz o Pop Refrescante de verão de volta aos holofotes de um sol eterno.',
       btnText: 'Visitar Álbum',
-      path: '/album/68',
+      path: '/album/825643551',
     },
     {
       id: 7,
+      type: 'image',
+      bg: taylorImg,
+      badge: 'Lançamento',
+      badgeColor: '#fde68a',
+      icon: <Music size={12} />,
+      title: 'THE LIFE OF A SHOWGIRL',
+      titleColor: '#f8dfb0ff',
+      overlay: 'linear-gradient(90deg, #793322ff 10%, #86352aaa 40%, rgba(92, 39, 10, 0) 80%)',
+      desc: 'Confira as reações mistas da comunidade ao lançamento mais recente de Taylor Swift.',
+      btnText: 'Visitar Álbum',
+      path: '/album/829966251',
+    },
+    {
+      id: 8,
       type: 'image',
       bg: addisonImg,
       badge: 'Em Alta',
@@ -183,24 +205,8 @@ export default function Home({ user, onLogout }) {
       overlay: 'linear-gradient(90deg, #d1a820f3 10%, #b99328aa 40%, rgba(173, 122, 12, 0) 80%)',
       desc: 'De celebridade da internet à indicada ao Grammy, conheça o álbum da Revelação do Ano pelo Scorefy.',
       btnText: 'Visitar Álbum',
-      path: '/album/48',
+      path: '/album/766908331',
     },
-    {
-      id: 8,
-      type: 'image',
-      bg: Katseye,
-      badge: 'Em Alta',
-      badgeColor: '#faf88eff',
-      icon: <Music size={12} />,
-      title: 'Katseye',
-      titleColor: '#fff024ff',
-      titleFont: "'Dancing Script', cursive",
-      titleSize: '70px',
-      overlay: 'linear-gradient(90deg, #0181b42a 10%, #2d6cca1e 20%, rgba(11, 64, 143, 0) 40%)',
-      desc: 'Grupo global a se conferir.',
-      btnText: 'Visitar Álbum',
-      path: '/album/69',
-    }
   ];
 
   // Timer: muda o banner a cada 10s
@@ -252,9 +258,7 @@ export default function Home({ user, onLogout }) {
           }}
         >
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px', color: '#9ca3af' }}>
-              Carregando biblioteca...
-            </div>
+            <LoadingSpinner fullScreen={false} />
           ) : isSearching ? (
 
             // TELA DE RESULTADOS DA PESQUISA
@@ -286,7 +290,7 @@ export default function Home({ user, onLogout }) {
                     {searchResults.artistas.map(art => (
                       <div
                         key={art.id_artista}
-                        onClick={() => navigate(`/artist/${encodeURIComponent(art.name)}`)}
+                        onClick={() => navigate(`/artist/${art.id_artista}`)}
                         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'transform 0.2s', width: '180px' }}
                         onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
                         onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -525,8 +529,12 @@ export default function Home({ user, onLogout }) {
 
               {/* Seções dinâmicas com dados do banco */}
               <SectionRow title="Em Alta" albums={sections.trending} path="/trending" />
-              <SectionRow title="Melhores Avaliações" albums={sections.top_rated} path="/top-rated" />
+              <SectionRow title="Singles em Alta" albums={sections.trending_singles} path="/trending-singles" />
               <SectionRow title="Novos Lançamentos" albums={sections.new_releases} path="/releases" />
+              
+              <SectionRow title="Melhores Avaliações" albums={sections.top_rated} path="/top-rated" />
+              
+              <TopTracksRow tracks={sections.top_tracks} />
             </>
           )}
         </main>
@@ -627,6 +635,119 @@ function SectionRow({ title, albums, path }) {
             <AlbumCard album={album} />
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+function TopTracksRow({ tracks }) {
+  const { activeTrack, isPlaying, playTrack } = usePlayer();
+  const [hoveredTrack, setHoveredTrack] = useState(null);
+  const [btnHover, setBtnHover] = useState(false);
+  const navigate = useNavigate();
+
+  if (!tracks || tracks.length === 0) return null;
+  
+  const displayTracks = tracks.slice(0, 7);
+
+  return (
+    <section style={{ marginBottom: '40px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Faixas Mais Bem Avaliadas</h2>
+        <button
+          onMouseEnter={() => setBtnHover(true)}
+          onMouseLeave={() => setBtnHover(false)}
+          onClick={() => navigate('/top-tracks')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            color: 'white',
+            backgroundColor: btnHover ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            padding: '8px 16px',
+            borderRadius: '100px',
+            cursor: 'pointer',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Ver Mais
+          <div style={{ transform: btnHover ? 'translateX(2px)' : 'translateX(0)', transition: 'transform 0.2s', display: 'flex' }}>
+            <ArrowRight size={14} />
+          </div>
+        </button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '20px' }}>
+        {displayTracks.map(track => {
+          const isThisPlaying = isPlaying && activeTrack?.id === track.id;
+          return (
+            <div 
+              key={track.id}
+              onClick={() => { if(track.album?.id) navigate(`/album/${track.album.id}`) }}
+              onMouseEnter={() => setHoveredTrack(track.id)}
+              onMouseLeave={() => setHoveredTrack(null)}
+              style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                position: 'relative',
+                overflow: 'hidden',
+                cursor: 'pointer',
+                transition: 'background 0.3s, transform 0.2s',
+                transform: hoveredTrack === track.id ? 'translateY(-4px)' : 'none'
+              }}
+            >
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', borderRadius: '12px', overflow: 'hidden' }}>
+                <img 
+                  src={track.album?.image} 
+                  alt={track.title} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'all 0.3s', filter: (hoveredTrack === track.id || isThisPlaying) ? 'brightness(0.5) blur(3px)' : 'brightness(1)' }} 
+                />
+                
+                {/* Modern Play Button Overlay */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); playTrack(track); }}
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: `translate(-50%, -50%) scale(${(hoveredTrack === track.id || isThisPlaying) ? 1 : 0.8})`,
+                    opacity: (hoveredTrack === track.id || isThisPlaying) ? 1 : 0,
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.15)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    color: 'white',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  {isThisPlaying ? <Pause fill="white" size={24} /> : <Play fill="white" size={24} style={{ marginLeft: '4px' }} />}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</span>
+                <span style={{ fontSize: '13px', color: '#9ca3af', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

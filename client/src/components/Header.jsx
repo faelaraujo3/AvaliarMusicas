@@ -196,48 +196,38 @@ export default function Header({ onSearch, hideSearch, hideNav }) {
                 }}>
                   
                   <h4 style={{ margin: 0, fontSize: '15px', color: 'white', fontWeight: 'bold' }}>
-                    Filtros Rápidos
+                    Filtros
                   </h4>
                   
-                  {/* Seletor de Géneros */}
+                  {/* Seletor de Busca Avançada (Ano/Gênero) */}
                   <div>
-                    <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Gênero</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
-                      {['Pop', 'Rock', 'Hip Hop', 'Indie', 'Skate Punk', 'Alternative Pop', 'Pop Rock', 'Indie Rock'].map(g => (
-                        <button 
-                          key={g} 
-                          onClick={() => handleQuickFilter(g)}
-                          style={{ 
-                            background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', 
-                            color: '#e5e7eb', padding: '6px 14px', borderRadius: '9999px', fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)'; e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.4)'; e.currentTarget.style.color = 'white'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#e5e7eb'; }}
-                        >
-                          {g}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Seletor de Anos*/}
-                  <div>
-                    <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Por Ano</span>
+                    <span style={{ fontSize: '11px', color: '#9ca3af', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>Por Ano de Lançamento</span>
                     <select 
                       onChange={(e) => {
-                        if (e.target.value) handleQuickFilter(e.target.value);
+                        if (e.target.value) {
+                            const input = document.getElementById('search-input');
+                            if (input) {
+                                // Limpa qualquer tag de ano anterior
+                                let val = input.value.replace(/year:\d{4}/g, '').trim();
+                                input.value = val ? `${val} year:${e.target.value}` : `year:${e.target.value} `;
+                                input.focus();
+                                if (onSearch) onSearch(input.value);
+                            }
+                        }
                       }}
                       style={{ 
-                        width: '100%', marginTop: '10px', backgroundColor: 'rgba(255,255,255,0.05)', 
+                        width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', 
                         border: '1px solid rgba(255,255,255,0.1)', color: 'white', 
                         padding: '10px 14px', borderRadius: '12px', fontSize: '14px', 
-                        outline: 'none', cursor: 'pointer', display: 'block', transition: 'border 0.2s'
+                        outline: 'none', cursor: 'pointer', display: 'block', transition: 'border 0.2s, background 0.2s'
                       }}
+                      onMouseEnter={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.08)'}
+                      onMouseLeave={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.05)'}
                       onFocus={e => e.target.style.borderColor = '#10b981'}
                       onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
                     >
-                      <option value="" style={{ color: 'black' }}>Selecione um ano...</option>
-                      {Array.from({ length: 71 }, (_, i) => 2025 - i).map(y => (
+                      <option value="" style={{ color: 'black' }}>Todos os anos...</option>
+                      {Array.from({ length: 71 }, (_, i) => 2026 - i).map(y => (
                         <option key={y} value={y} style={{ color: 'black' }}>
                           {y}
                         </option>
@@ -386,17 +376,18 @@ export default function Header({ onSearch, hideSearch, hideNav }) {
                             </div>
 
                             {/* Texto Principal da Ação */}
-                            <p style={{ margin: 0, fontSize: '15px', color: notif.lida ? '#9ca3af' : '#e5e7eb', lineHeight: '1.4' }}>
-                              <strong style={{ color: notif.lida ? '#d1d5db' : 'white' }}>{firstWord}</strong>
+                            <p style={{ margin: 0, fontSize: '15px', color: notif.lida ? '#a1a1aa' : 'white', fontWeight: notif.lida ? '400' : '500', lineHeight: '1.4' }}>
+                              <strong style={{ color: 'white', fontWeight: 'bold' }}>{firstWord}</strong>
                               {messageRest}
                             </p>
 
                             {/* Comentário extra */}
                             {notif.tipo === 'resposta' && notif.texto_comentario && (
-                              <p style={{ margin: 0, fontSize: '15px', color: '#6b7280', lineHeight: '1.4' }}>
-                                {notif.texto_comentario}
+                              <p style={{ margin: 0, fontSize: '15px', color: '#d1d5db', lineHeight: '1.5', fontStyle: 'italic' }}>
+                                "{notif.texto_comentario}"
                               </p>
                             )}
+
 
                             {/* Data */}
                             <span style={{ fontSize: '12px', color: '#4b5563', marginTop: '2px' }}>

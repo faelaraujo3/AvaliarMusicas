@@ -282,7 +282,7 @@ function ChatWidget() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingChatUser, isOpen]);
 
-  // Fetches 
+  // requests pra api 
   const fetchConversations = useCallback(async () => {
     if (!user) return;
     try {
@@ -304,7 +304,7 @@ function ChatWidget() {
     } catch { /* silencioso */ }
   }, [user]);
 
-  // Polls
+  // hooks de polling
   useEffect(() => {
     if (isOpen) { fetchConversations(); convPollRef.current = setInterval(fetchConversations, 10000); }
     else clearInterval(convPollRef.current);

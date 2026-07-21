@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import AlbumCard from '../components/AlbumCard';
 import { Flame, Star, Sparkles, Globe, Search, User } from 'lucide-react';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function AlbumList({ apiEndpoint }) {
   const [albums, setAlbums] = useState([]);
@@ -152,7 +153,7 @@ export default function AlbumList({ apiEndpoint }) {
                   {searchResults.artistas.map(art => (
                     <div 
                       key={art.id_artista} 
-                      onClick={() => navigate(`/artist/${encodeURIComponent(art.name)}`)} 
+                      onClick={() => navigate(`/artist/${art.id_artista}`)} 
                       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'transform 0.2s', width: '180px' }} 
                       onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} 
                       onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -274,9 +275,7 @@ export default function AlbumList({ apiEndpoint }) {
 
               {/* GRID DE ÁLBUNS */}
               {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', color: '#9ca3af' }}>
-                  Carregando coleção...
-                </div>
+                <LoadingSpinner fullScreen={false} />
               ) : (
                 <div style={{ 
                   display: 'grid', 

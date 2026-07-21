@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Users, Star, StarHalf, MessageCircle, Heart, Music } from 'lucide-react';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Feed() {
   const { user } = useAuth();
@@ -50,7 +51,7 @@ export default function Feed() {
     }).then(() => fetchFeed());
   };
 
-  // Função para renderizar estrelas (ligeiramente maior agora)
+  // helper q renderiza as estrelinhas baseadas na nota
   const renderStars = (val) => {
     const stars = [];
     const fullStars = Math.floor(val);
@@ -67,10 +68,10 @@ export default function Feed() {
     <div style={{ minHeight: '100vh', backgroundColor: '#09090b', color: 'white', paddingBottom: '80px' }}>
       <Header />
 
-      {/* Container principal mais largo (900px) */}
+      {/* container principal limitando a largura maxima */}
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         
-        {/* Cabeçalho da Página com efeito Glass */}
+        {/* header da pagina */}
         <div style={{ 
             marginBottom: '16px', padding: '24px', 
             borderRadius: '24px',
@@ -85,7 +86,7 @@ export default function Feed() {
             <p style={{ color: '#a1a1aa', margin: 0, fontSize: '16px' }}>As avaliações mais recentes da sua bolha musical.</p>
         </div>
 
-        {/* Estados de Loading/Vazio/Login */}
+        {/* controle de estado: loading, deslogado ou empty state */}
         {!user ? (
           <EmptyStateBox 
             icon={<Users size={48} />} 
@@ -94,7 +95,7 @@ export default function Feed() {
             action={<button onClick={() => navigate('/login')} style={buttonStyle}>Fazer Login</button>}
           />
         ) : loading ? (
-          <div style={{ textAlign: 'center', color: '#666', padding: '40px', fontSize: '18px', fontWeight: '500' }}>Carregando a sua timeline...</div>
+          <LoadingSpinner fullScreen={false} />
         ) : feed.length === 0 ? (
           <EmptyStateBox 
             icon={<Music size={48} />}
@@ -102,7 +103,7 @@ export default function Feed() {
             description="Procure utilizadores na barra de pesquisa e comece a segui-los para ver as suas avaliações aqui!"
           />
         ) : (
-          /* Lista de Cards do Feed */
+          /* listagem dos cards do feed */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {feed.map(item => (
               <FeedCard key={item._id} item={item} navigate={navigate} renderStars={renderStars} currentUser={user} onLike={handleLike} onReply={handleReply} />
@@ -114,9 +115,9 @@ export default function Feed() {
   );
 }
 
-// --- Componentes Auxiliares para manter o código limpo ---
+// extraindo os componentes pra nao poluir muito o Feed principal
 
-// O novo Card de Review Moderno
+// componente de card de review
 function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply }) {
     const [isHovered, setIsHovered] = useState(false);
     const [showReply, setShowReply] = useState(false);
@@ -132,7 +133,7 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
             style={{ 
                 display: 'flex', gap: '20px', padding: '28px', 
                 borderRadius: '24px',
-                // Design moderno de cartão flutuante
+                // estilos dinamicos pro hover state
                 backgroundColor: isHovered ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.015)',
                 border: `1px solid ${isHovered ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)'}`,
                 boxShadow: isHovered ? '0 10px 30px -10px rgba(0,0,0,0.5)' : 'none',
@@ -140,7 +141,7 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                 position: 'relative', overflow: 'hidden'
             }}
         >
-            {/* Avatar do Autor */}
+            {/* avatar do autor */}
             <div 
                 onClick={(e) => { e.stopPropagation(); navigate(`/profile/${item.autor_username}`); }}
                 style={{ width: '52px', height: '52px', borderRadius: '50%', background: '#27272a', overflow: 'hidden', flexShrink: 0, border: '2px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}
@@ -152,10 +153,10 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                 )}
             </div>
 
-            {/* Conteúdo do Post */}
+            {/* conteudo principal do post */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 
-                {/* Header do Post */}
+                {/* info do autor e data */}
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                     <span 
                         onClick={(e) => { e.stopPropagation(); navigate(`/profile/${item.autor_username}`); }}
@@ -168,14 +169,14 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                     <span style={{ color: '#52525b', fontSize: '14px' }}>· {item.data_postagem.split(' ')[0]}</span>
                 </div>
 
-                {/* Review Texto */}
+                {/* texto da review (se houver) */}
                 {item.texto && (
                     <p style={{ margin: '0', fontSize: '16px', color: '#e4e4e7', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                         {item.texto}
                     </p>
                 )}
 
-                {/* Card Embutido do Álbum (Efeito Glassmorphism Moderno) */}
+                {/* card menor embutido exibindo as infos do album avaliado */}
                 {item.album_info && (
                     <div style={{ 
                         display: 'flex', alignItems: 'center', gap: '20px', marginTop: '8px',
@@ -188,14 +189,14 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                     onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
                     onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
                     >
-                        {/* Capa do Álbum Maior */}
+                        {/* capa do album */}
                         <img src={item.album_info.image} alt="Capa" style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', boxShadow: '0 8px 20px rgba(0,0,0,0.4)' }} />
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
                             <span style={{ fontWeight: '800', fontSize: '18px', color: 'white', letterSpacing: '-0.01em' }}>{item.album_info.title}</span>
                             <span style={{ fontSize: '14px', color: '#a1a1aa' }}>{item.album_info.artist}</span>
                             
-                            {/* Nota Destacada */}
+                            {/* nota em destaque estilo badge */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', backgroundColor: 'rgba(0,0,0,0.2)', width: 'fit-content', padding: '4px 10px', borderRadius: '12px' }}>
                                 <div style={{ display: 'flex', gap: '2px' }}>{renderStars(item.nota)}</div>
                                 <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#facc15' }}>{item.nota}</span>
@@ -204,7 +205,7 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                     </div>
                 )}
 
-                {/* Botões de Interação (Feedback Visual) */}
+                {/* actions bar (like e comments) */}
                 <div style={{ display: 'flex', gap: '24px', marginTop: '8px', color: '#71717a' }}>
                     <div 
                         onClick={(e) => { e.stopPropagation(); onLike(item._id); }}
@@ -213,7 +214,7 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                         <Heart size={18} fill={isLiked ? '#ef4444' : 'none'} /> {item.curtidas?.length || 0}
                     </div>
                     <div 
-                        onClick={(e) => { e.stopPropagation(); setShowReply(!showReply); }}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/review/${item._id}`); }}
                         style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', transition: 'color 0.2s' }}
                         onMouseEnter={e => e.currentTarget.style.color = '#3b82f6'}
                         onMouseLeave={e => e.currentTarget.style.color = '#71717a'}
@@ -221,49 +222,12 @@ function FeedCard({ item, navigate, renderStars, currentUser, onLike, onReply })
                         <MessageCircle size={18} /> {item.respostas?.length || 0}
                     </div>
                 </div>
-
-                {showReply && (
-                    <div 
-                        onClick={(e) => e.stopPropagation()} 
-                        style={{ display: 'flex', gap: '12px', marginTop: '4px', alignItems: 'center' }}
-                    >
-                        <input 
-                            autoFocus
-                            type="text" 
-                            placeholder="Adicione um comentário..."
-                            value={replyText}
-                            onChange={(e) => setReplyText(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && replyText.trim()) {
-                                    onReply(item._id, replyText);
-                                    setReplyText('');
-                                    setShowReply(false);
-                                }
-                            }}
-                            style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px 14px', color: 'white', fontSize: '14px', outline: 'none', transition: 'border-color 0.2s' }}
-                            onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
-                            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
-                        />
-                        <button 
-                            onClick={() => {
-                                onReply(item._id, replyText);
-                                setReplyText('');
-                                setShowReply(false);
-                            }}
-                            disabled={!replyText.trim()}
-                            style={{ backgroundColor: replyText.trim() ? '#3b82f6' : 'rgba(255,255,255,0.1)', color: 'white', border: 'none', borderRadius: '12px', padding: '10px 16px', fontWeight: 'bold', cursor: replyText.trim() ? 'pointer' : 'default', transition: 'all 0.2s' }}
-                        >
-                            Enviar
-                        </button>
-                    </div>
-                )}
-
             </div>
         </div>
     );
 }
 
-// Componente para estados vazios
+// componente reutilizavel pra estados vazios
 function EmptyStateBox({ icon, title, description, action }) {
     return (
         <div style={{ textAlign: 'center', padding: '80px 40px', backgroundColor: 'rgba(255,255,255,0.015)', borderRadius: '32px', border: '1px dashed rgba(255,255,255,0.1)' }}>

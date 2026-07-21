@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import os
 import re
 from bson import ObjectId
-
+import urllib.request
+import json
 app = Flask(__name__)
 CORS(app)
 
@@ -21,6 +22,65 @@ albuns_col = db["albums"]
 criticas_col = db["reviews"]
 notificacoes_col = db["notifications"]
 listas_col = db["lists"]
+messages_col = db["messages"]
+track_ratings_col = db["track_ratings"]
+
+def fetch_deezer_album(album_id):
+    try:
+        url = f"https://api.deezer.com/album/{album_id}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+        
+        if 'error' in data:
+            return None
+            
+        duration = data.get('duration', 0)
+        minutes = duration // 60
+        hours = minutes // 60
+        remaining_minutes = minutes % 60
+        
+        nb_tracks = data.get('nb_tracks', 0)
+        
+        if hours > 0:
+            description = f"{nb_tracks} músicas • {hours} horas e {remaining_minutes} minutos"
+        else:
+            description = f"{nb_tracks} músicas • {minutes} minutos"
+
+        album_doc = {
+            "id_album": data['id'],
+            "title": data['title'],
+            "id_artista": data['artist']['id'],
+            "year": int(data['release_date'][:4]) if 'release_date' in data else None,
+            "genre": data['genres']['data'][0]['name'] if 'genres' in data and data['genres']['data'] else "Desconhecido",
+            "image": data.get('cover_xl') or data.get('cover_big') or data.get('cover'),
+            "artist": data['artist']['name'],
+            "description": description,
+            "record_type": data.get('record_type', 'album'),
+            "tracks": data['tracks']['data'] if 'tracks' in data else []
+        }
+        
+        # atualiza ou insere o artista no cache
+        artistas_col.update_one(
+            {"id_artista": data['artist']['id']},
+            {"$set": {
+                "id_artista": data['artist']['id'],
+                "name": data['artist']['name'],
+                "image_url": data['artist'].get('picture_xl') or data['artist'].get('picture_big') or data['artist'].get('picture')
+            }},
+            upsert=True
+        )
+        
+        # atualiza ou insere o album no cache
+        albuns_col.update_one(
+            {"id_album": data['id']},
+            {"$set": album_doc},
+            upsert=True
+        )
+        return album_doc
+    except Exception as e:
+        print(f"Error fetching Deezer album {album_id}: {e}")
+        return None
 
 # --- ROTA DE LOGIN ---
 @app.route('/api/login', methods=['POST'])
@@ -85,36 +145,90 @@ def registrar():
 # --- BUSCA E LISTAGEM com ano genero etc ---
 @app.route('/api/busca', methods=['GET'])
 def busca_global():
-    termo = request.args.get('q', '')
+    import urllib.parse
+    import re
+    from concurrent.futures import ThreadPoolExecutor
+
+    termo_original = request.args.get('q', '')
+    
+    # Extrai filtro de ano customizado: year:2024
+    ano_filtro = None
+    match = re.search(r'year:(\d{4})', termo_original)
+    if match:
+        ano_filtro = match.group(1)
+        termo = termo_original.replace(match.group(0), '').strip()
+    else:
+        termo = termo_original
+
     if not termo:
         return jsonify({"artistas": [], "albuns": [], "usuarios": []}), 200
 
-    artistas = list(artistas_col.find({"name": {"$regex": termo, "$options": "i"}}, {"_id": 0}))
-
-    filtro_albuns = {
-        "$or": [
-            {"title": {"$regex": termo, "$options": "i"}},
-            {"genre": {"$regex": termo, "$options": "i"}}
-        ]
-    }
+    albuns = []
+    artistas = []
 
     try:
-        ano_busca = int(termo)
-        filtro_albuns["$or"].append({"year": ano_busca})
-    except ValueError:
-        pass
+        url_a = f"https://api.deezer.com/search/album?q={urllib.parse.quote(termo)}&limit=15"
+        req_a = urllib.request.Request(url_a, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_a) as res:
+            data_a = json.loads(res.read().decode()).get('data', [])
+            # Se houver filtro de ano, busca os detalhes em paralelo pra não demorar
+            if ano_filtro:
+                def fetch_album_details(a):
+                    try:
+                        url_detail = f"https://api.deezer.com/album/{a['id']}"
+                        req_det = urllib.request.Request(url_detail, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req_det) as res_det:
+                            return json.loads(res_det.read().decode())
+                    except:
+                        return None
 
-    albuns = list(albuns_col.find(filtro_albuns, {"_id": 0}))
+                with ThreadPoolExecutor(max_workers=15) as executor:
+                    detalhes = list(executor.map(fetch_album_details, data_a))
+                
+                for idx, det in enumerate(detalhes):
+                    if det and det.get('release_date', '').startswith(ano_filtro):
+                        a = data_a[idx]
+                        album_doc = {
+                            "id_album": a['id'],
+                            "title": a['title'],
+                            "id_artista": a['artist']['id'],
+                            "image": a.get('cover_xl') or a.get('cover_big') or a.get('cover'),
+                            "artist": a['artist']['name'],
+                            "record_type": a.get('record_type', 'album'),
+                            "release_date": det.get('release_date')
+                        }
+                        albuns_col.update_one({"id_album": a['id']}, {"$set": album_doc}, upsert=True)
+                        albuns.append(album_doc)
+            else:
+                for a in data_a:
+                    album_doc = {
+                        "id_album": a['id'],
+                        "title": a['title'],
+                        "id_artista": a['artist']['id'],
+                        "image": a.get('cover_xl') or a.get('cover_big') or a.get('cover'),
+                        "artist": a['artist']['name'],
+                        "record_type": a.get('record_type', 'album')
+                    }
+                    albuns_col.update_one({"id_album": a['id']}, {"$set": album_doc}, upsert=True)
+                    albuns.append(album_doc)
+    except Exception as e:
+        print("Erro Deezer Albums:", e)
 
-    for art in artistas:
-        albuns_do_artista = list(albuns_col.find({"id_artista": art.get("id_artista")}, {"_id": 0}))
-        for album in albuns_do_artista:
-            if album not in albuns: 
-                albuns.append(album)
-
-    for album in albuns:
-        artista_db = artistas_col.find_one({"id_artista": album.get("id_artista")})
-        album["artist"] = artista_db["name"] if artista_db else "Desconhecido"
+    try:
+        url_art = f"https://api.deezer.com/search/artist?q={urllib.parse.quote(termo)}&limit=10"
+        req_art = urllib.request.Request(url_art, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_art) as res:
+            data_art = json.loads(res.read().decode()).get('data', [])
+            for art in data_art:
+                artist_doc = {
+                    "id_artista": art['id'],
+                    "name": art['name'],
+                    "image_url": art.get('picture_xl') or art.get('picture_big') or art.get('picture')
+                }
+                artistas_col.update_one({"id_artista": art['id']}, {"$set": artist_doc}, upsert=True)
+                artistas.append(artist_doc)
+    except Exception as e:
+        print("Erro Deezer Artists:", e)
 
     usuarios = list(usuarios_col.find({
         "$or": [
@@ -124,6 +238,39 @@ def busca_global():
     }, {"_id": 0, "senha": 0})) 
 
     return jsonify({"artistas": artistas, "albuns": albuns, "usuarios": usuarios}), 200
+
+@app.route('/api/busca/faixas', methods=['GET'])
+def busca_faixas():
+    import urllib.parse
+    termo = request.args.get('q', '')
+    if not termo:
+        return jsonify([]), 200
+
+    faixas = []
+    try:
+        url = f"https://api.deezer.com/search/track?q={urllib.parse.quote(termo)}&limit=15"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as res:
+            data = json.loads(res.read().decode()).get('data', [])
+            for t in data:
+                # a gente precisa do preview_url pra tocar, entao so retorna se tiver
+                if t.get('preview'):
+                    faixas.append({
+                        "id": t['id'],
+                        "title": t['title'],
+                        "artist": t['artist']['name'],
+                        "album": {
+                            "id": t['album']['id'],
+                            "title": t['album']['title'],
+                            "image": t['album'].get('cover_xl') or t['album'].get('cover_big') or t['album'].get('cover')
+                        },
+                        "preview": t['preview'],
+                        "duration": t.get('duration', 0)
+                    })
+    except Exception as e:
+        print("Erro Deezer Tracks:", e)
+
+    return jsonify(faixas), 200
 
 @app.route('/api/albuns', methods=['GET'])
 def listar_albuns():
@@ -172,10 +319,7 @@ def postar_review():
 
 @app.route('/api/reviews/<review_id>', methods=['DELETE'])
 def deletar_review(review_id):
-    criticas_col.update_one(
-        {"_id": ObjectId(review_id)},
-        {"$set": {"excluida": True, "texto": "Esta review foi excluída pelo autor", "nota": 0}}
-    )
+    criticas_col.delete_one({"_id": ObjectId(review_id)})
     return jsonify({"message": "Review excluída"}), 200
 
 @app.route('/api/reviews/<review_id>', methods=['PUT'])
@@ -207,14 +351,20 @@ def editar_resposta_rota(review_id):
 
 @app.route('/api/albuns/<int:id_album>', methods=['GET'])
 def detalhes_album(id_album):
-    album = albuns_col.find_one({"id_album": id_album}, {"_id": 0})
-    if not album: return jsonify({"error": "Álbum não encontrado"}), 404
-
-    if "id_artista" in album:
-        artista_db = artistas_col.find_one({"id_artista": album["id_artista"]})
-        album["artist"] = artista_db["name"] if artista_db else "Desconhecido"
-    else:
-        album["artist"] = "Desconhecido"
+    # Tenta puxar dados fresquinhos do Deezer
+    album = fetch_deezer_album(id_album)
+    
+    # Fallback pro cache local caso o Deezer falhe
+    if not album:
+        album = albuns_col.find_one({"id_album": id_album}, {"_id": 0})
+        if not album: 
+            return jsonify({"error": "Álbum não encontrado"}), 404
+        
+        if "id_artista" in album:
+            artista_db = artistas_col.find_one({"id_artista": album["id_artista"]})
+            album["artist"] = artista_db["name"] if artista_db else "Desconhecido"
+        else:
+            album["artist"] = "Desconhecido"
         
     reviews = list(criticas_col.find({"id_album": id_album}))
     notas = [r['nota'] for r in reviews if 'nota' in r]
@@ -243,13 +393,71 @@ def detalhes_album(id_album):
         "reviews": reviews
     }), 200
 
+@app.route('/api/reviews/<review_id>', methods=['GET'])
+def detalhes_review(review_id):
+    try:
+        review = criticas_col.find_one({"_id": ObjectId(review_id)})
+        if not review:
+            return jsonify({"error": "Review não encontrada"}), 404
+
+        review['_id'] = str(review['_id'])
+        
+        # recupera os dados do autor da review
+        user_db = usuarios_col.find_one({"id_user": review["id_user"]})
+        if user_db:
+            review['imagem_url'] = user_db.get('imagem_url', 'default_avatar.png')
+            review['username'] = user_db.get('username') or user_db.get('nome')
+
+        # popula as infos de usuario pra cada resposta da thread
+        if "respostas" in review:
+            for resp in review["respostas"]:
+                try:
+                    r_id_user = int(resp.get("id_user"))
+                except:
+                    r_id_user = resp.get("id_user")
+                    
+                resp_user_db = usuarios_col.find_one({"id_user": r_id_user})
+                if resp_user_db:
+                    resp['imagem_url'] = resp_user_db.get('imagem_url', 'default_avatar.png')
+                    resp['username'] = resp_user_db.get('username') or resp_user_db.get('nome')
+                    
+        # puxa dados do album do db local (fallback pro cache se necessario futuramente)
+        album_data = albuns_col.find_one({"id_album": review['id_album']}, {"_id": 0})
+        if album_data:
+            if "id_artista" in album_data:
+                artista_db = artistas_col.find_one({"id_artista": album_data["id_artista"]})
+                album_data["artist"] = artista_db.get("name", "Desconhecido") if artista_db else "Desconhecido"
+            else:
+                album_data["artist"] = "Desconhecido"
+        else:
+            album_data = None
+            
+        # busca as notas individuais que esse usuario deu pras faixas desse disco
+        track_ratings_db = list(track_ratings_col.find({
+            "id_user": review["id_user"],
+            "id_album": review["id_album"]
+        }, {"_id": 0}))
+
+        # de-normaliza os titulos das faixas junto das notas usando as infos em album_data
+        if album_data and "tracks" in album_data and "data" in album_data["tracks"]:
+            track_dict = {t["id"]: t["title"] for t in album_data["tracks"]["data"]}
+            for tr in track_ratings_db:
+                tr["title"] = track_dict.get(tr["id_track"], f"Faixa {tr['id_track']}")
+        
+        review["track_ratings"] = track_ratings_db
+            
+        return jsonify({"review": review, "album": album_data}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 # --- INTERAÇÕES E NOTIFICAÇÕES ---
 @app.route('/api/reviews/<review_id>/curtir', methods=['POST'])
 def curtir_review(review_id):
     data = request.json
     id_user_curtiu = data.get('id_user')
     
-    # busca quem está curtindo no banco
+    # carrega o perfil de quem ta dando o like
     user_curtiu = usuarios_col.find_one({"id_user": id_user_curtiu})
     nome_quem_curtiu = user_curtiu.get('username') if user_curtiu else data.get('username', 'Alguém')
     imagem_quem_curtiu = user_curtiu.get('imagem_url') if user_curtiu else "default_avatar.png"
@@ -485,7 +693,7 @@ def obter_secoes_home():
 
     lista_top = buscar_detalhes_album(melhores_agregados)
     if not lista_top:
-        lista_top = list(albuns_col.find({}, {"_id": 0}).skip(8).limit(8))
+        lista_top = list(albuns_col.find({"$or": [{"record_type": "album"}, {"record_type": "ep"}, {"record_type": {"$exists": False}}]}, {"_id": 0}).skip(8).limit(8))
         for x in lista_top:
              art = artistas_col.find_one({"id_artista": x["id_artista"]})
              x["artist"] = art["name"] if art else "Desconhecido"
@@ -493,10 +701,66 @@ def obter_secoes_home():
              notas = [r['nota'] for r in reviews if 'nota' in r]
              x["rating"] = round(sum(notas) / len(notas), 1) if notas else 0.0
 
+    # Puxar Singles em Alta (por popularidade ou data)
+    lista_singles = list(albuns_col.find({"record_type": "single"}, {"_id": 0}).sort("year", -1).limit(8))
+    for x in lista_singles:
+         art = artistas_col.find_one({"id_artista": x["id_artista"]})
+         x["artist"] = art["name"] if art else "Desconhecido"
+         reviews = list(criticas_col.find({"id_album": x["id_album"]}))
+         notas = [r['nota'] for r in reviews if 'nota' in r]
+         x["rating"] = round(sum(notas) / len(notas), 1) if notas else 0.0
+
+    # Puxar Faixas mais bem avaliadas
+    top_tracks = []
+    pipeline_tracks = [
+        {"$group": {"_id": {"id_album": "$id_album", "id_track": "$id_track"}, "media": {"$avg": "$nota"}, "count": {"$sum": 1}}},
+        {"$sort": {"media": -1, "count": -1}},
+        {"$limit": 10}
+    ]
+    melhores_tracks_db = list(track_ratings_col.aggregate(pipeline_tracks))
+
+    if melhores_tracks_db:
+        for t in melhores_tracks_db:
+            id_a = t["_id"]["id_album"]
+            id_t = t["_id"]["id_track"]
+            alb = albuns_col.find_one({"id_album": id_a})
+            if alb and 'tracks' in alb:
+                track_data = next((x for x in alb['tracks'] if x['id'] == id_t), None)
+                if track_data and track_data.get('preview'):
+                    top_tracks.append({
+                        "id": track_data['id'],
+                        "title": track_data['title'],
+                        "preview": track_data['preview'],
+                        "duration": track_data.get('duration', 0),
+                        "artist": alb.get('artist', 'Desconhecido'),
+                        "album": {"id": alb['id_album'], "title": alb['title'], "image": alb.get('image')},
+                        "rating": round(t["media"], 1)
+                    })
+
+    # Fallback se não houver tracks suficientes avaliadas
+    if len(top_tracks) < 8:
+        for alb in lista_trending + novos_lancamentos:
+            if 'tracks' in alb:
+                for tr in alb['tracks']:
+                    if tr.get('preview') and not any(x['id'] == tr['id'] for x in top_tracks):
+                        top_tracks.append({
+                            "id": tr['id'],
+                            "title": tr['title'],
+                            "preview": tr['preview'],
+                            "duration": tr.get('duration', 0),
+                            "artist": alb.get('artist', 'Desconhecido'),
+                            "album": {"id": alb['id_album'], "title": alb['title'], "image": alb.get('image')},
+                            "rating": round(tr.get('rank', 0) / 100000, 1) if tr.get('rank') else 0
+                        })
+                    if len(top_tracks) >= 8: break
+            if len(top_tracks) >= 8: break
+
     return jsonify({
         "trending": lista_trending,
         "top_rated": lista_top,
-        "new_releases": novos_lancamentos
+        "new_releases": novos_lancamentos,
+        "trending_singles": lista_singles,
+        "top_tracks": top_tracks
     })
 
 def formatar_albuns(lista_ids_ou_docs):
@@ -552,6 +816,60 @@ def lista_em_alta():
         fallback = list(albuns_col.find({}, {"_id": 0}).sort("year", -1).limit(20))
         return jsonify(formatar_albuns(fallback))
     return jsonify(formatar_albuns(ids))
+
+@app.route('/api/lista/singles-em-alta', methods=['GET'])
+def lista_singles_em_alta():
+    # Puxar Singles em Alta (por data)
+    lista_singles = list(albuns_col.find({"record_type": "single"}, {"_id": 0}).sort("year", -1).limit(40))
+    return jsonify(formatar_albuns(lista_singles))
+
+@app.route('/api/lista/melhores-faixas', methods=['GET'])
+def lista_melhores_faixas():
+    top_tracks = []
+    pipeline_tracks = [
+        {"$group": {"_id": {"id_album": "$id_album", "id_track": "$id_track"}, "media": {"$avg": "$nota"}, "count": {"$sum": 1}}},
+        {"$sort": {"media": -1, "count": -1}},
+        {"$limit": 50}
+    ]
+    melhores_tracks_db = list(track_ratings_col.aggregate(pipeline_tracks))
+
+    if melhores_tracks_db:
+        for t in melhores_tracks_db:
+            id_a = t["_id"]["id_album"]
+            id_t = t["_id"]["id_track"]
+            alb = albuns_col.find_one({"id_album": id_a})
+            if alb and 'tracks' in alb:
+                track_data = next((x for x in alb['tracks'] if x['id'] == id_t), None)
+                if track_data and track_data.get('preview'):
+                    top_tracks.append({
+                        "id": track_data['id'],
+                        "title": track_data['title'],
+                        "preview": track_data['preview'],
+                        "duration": track_data.get('duration', 0),
+                        "artist": alb.get('artist', 'Desconhecido'),
+                        "album": {"id": alb['id_album'], "title": alb['title'], "image": alb.get('image')},
+                        "rating": round(t["media"], 1)
+                    })
+
+    if len(top_tracks) < 20:
+        lista_trending = list(albuns_col.find({"$or": [{"record_type": "album"}, {"record_type": "ep"}, {"record_type": {"$exists": False}}]}, {"_id": 0}).sort("year", -1).limit(20))
+        for alb in lista_trending:
+            if 'tracks' in alb:
+                for tr in alb['tracks']:
+                    if tr.get('preview') and not any(x['id'] == tr['id'] for x in top_tracks):
+                        top_tracks.append({
+                            "id": tr['id'],
+                            "title": tr['title'],
+                            "preview": tr['preview'],
+                            "duration": tr.get('duration', 0),
+                            "artist": alb.get('artist', 'Desconhecido'),
+                            "album": {"id": alb['id_album'], "title": alb['title'], "image": alb.get('image')},
+                            "rating": round(tr.get('rank', 0) / 100000, 1) if tr.get('rank') else 0
+                        })
+                    if len(top_tracks) >= 30: break
+            if len(top_tracks) >= 30: break
+
+    return jsonify(top_tracks)
 
 @app.route('/api/lista/melhores', methods=['GET'])
 def lista_melhores():
@@ -639,18 +957,24 @@ def get_user_profile(id_user):
             "_id": {"$toString": "$_id"},
             "titulo": 1,
             "descricao": 1,
+            "tipo": 1,
             "albuns": 1,
+            "faixas": 1,
             "data_criacao": 1,
             "capa_personalizada": 1,
-            "capas": {
-                "$slice": [
-                    {"$map": {"input": "$detalhes_albuns", "as": "a", "in": "$$a.image"}},
-                    4
-                ]
+            "capas_albuns": {
+                "$map": {"input": "$detalhes_albuns", "as": "a", "in": "$$a.image"}
             }
         }},
         {"$sort": {"data_criacao": -1}}
     ]))
+
+    for lista in listas_agregadas:
+        # Se for lista de faixas, extrai as imagens diretamente do objeto de faixa
+        if lista.get("tipo") == "faixa":
+            lista["capas"] = [f.get("album", {}).get("image") for f in lista.get("faixas", [])][:4]
+        else:
+            lista["capas"] = lista.get("capas_albuns", [])[:4]
 
     return jsonify({
         "user": usuario, 
@@ -698,34 +1022,81 @@ def update_user_profile(id_user):
     if 'pref_notificacoes' in data:
         campos_atualizar['pref_notificacoes'] = data['pref_notificacoes']
 
-    if not campos_atualizar: return jsonify({"message": "Nada para atualizar"}), 200
+    if 'pinned_track' in data:
+        campos_atualizar['pinned_track'] = data['pinned_track']
 
+    if not campos_atualizar: return jsonify({"message": "Nada para atualizar"}), 200
     result = usuarios_col.update_one({"id_user": id_user}, {"$set": campos_atualizar})
     if result.matched_count == 0: return jsonify({"error": "Usuário não encontrado"}), 404
 
     user_atualizado = usuarios_col.find_one({"id_user": id_user}, {"_id": 0, "senha": 0})
     return jsonify({"message": "Dados atualizados com sucesso!", "user": user_atualizado}), 200
 
-@app.route('/api/artistas/nome/<string:nome_artista>', methods=['GET'])
-def detalhes_artista_por_nome(nome_artista):
-    artista = artistas_col.find_one({"name": {"$regex": f"^{nome_artista}$", "$options": "i"}}, {"_id": 0})
+@app.route('/api/artistas/<int:id_artista>', methods=['GET'])
+def detalhes_artista(id_artista):
+    # Tenta puxar dados fresquinhos do Deezer
+    try:
+        url = f"https://api.deezer.com/artist/{id_artista}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode())
+        
+        if 'error' not in data:
+            artista = {
+                "id_artista": data['id'],
+                "name": data['name'],
+                "image_url": data.get('picture_xl') or data.get('picture_big') or data.get('picture')
+            }
+            artistas_col.update_one({"id_artista": id_artista}, {"$set": artista}, upsert=True)
+        else:
+            artista = artistas_col.find_one({"id_artista": id_artista}, {"_id": 0})
+    except Exception:
+        artista = artistas_col.find_one({"id_artista": id_artista}, {"_id": 0})
+
     if not artista: return jsonify({"error": "Artista não encontrado"}), 404
 
-    id_artista = artista.get("id_artista")
-    albuns = list(albuns_col.find({"id_artista": id_artista}, {"_id": 0}))
+    # Buscar albuns do artista na deezer
+    try:
+        url_albuns = f"https://api.deezer.com/artist/{id_artista}/albums?limit=100"
+        req_a = urllib.request.Request(url_albuns, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_a) as response_a:
+            data_a = json.loads(response_a.read().decode())
+        
+        albuns = []
+        if 'error' not in data_a and 'data' in data_a:
+            for a in data_a['data']:
+                album_doc = {
+                    "id_album": a['id'],
+                    "title": a['title'],
+                    "id_artista": id_artista,
+                    "year": int(a['release_date'][:4]) if 'release_date' in a else None,
+                    "image": a.get('cover_xl') or a.get('cover_big') or a.get('cover'),
+                    "record_type": a.get('record_type', 'album'),
+                    "genre": a.get('genre_id', 'Desconhecido')
+                }
+                albuns_col.update_one({"id_album": a['id']}, {"$set": album_doc}, upsert=True)
+                albuns.append(album_doc)
+        else:
+            albuns = list(albuns_col.find({"id_artista": id_artista}, {"_id": 0}))
+    except Exception:
+        albuns = list(albuns_col.find({"id_artista": id_artista}, {"_id": 0}))
 
+    # Calcular nota de cada album
     total_notas = []
     for album in albuns:
         reviews = list(criticas_col.find({"id_album": album["id_album"]}))
-        for r in reviews:
-            if 'nota' in r: total_notas.append(r['nota'])
-        
         notas_album = [r['nota'] for r in reviews if 'nota' in r]
-        album["rating"] = round(sum(notas_album) / len(notas_album), 1) if notas_album else 0.0
+        
+        album['nota_media'] = round(sum(notas_album) / len(notas_album), 1) if notas_album else 0
+        total_notas.extend(notas_album)
+        
+    media_geral = sum(total_notas) / len(total_notas) if total_notas else 0
 
-    media_artista = round(sum(total_notas) / len(total_notas), 1) if total_notas else 0.0
-
-    return jsonify({"artista": artista, "media_geral": media_artista, "albuns": albuns}), 200
+    return jsonify({
+        "artista": artista,
+        "albuns": albuns,
+        "media_geral": round(media_geral, 1)
+    }), 200
 
 @app.route('/api/profile/username/<username>', methods=['GET'])
 def get_profile_by_username(username):
@@ -819,8 +1190,10 @@ def criar_lista(id_user):
         "id_user": id_user,
         "titulo": data.get("titulo", "Nova Playlist"),
         "descricao": data.get("descricao", ""),
+        "tipo": data.get("tipo", "album"),
         "capa_personalizada": "", 
         "albuns": [],
+        "faixas": [],
         "data_criacao": datetime.now().strftime("%d/%m/%Y %H:%M")
     }
     listas_col.insert_one(nova_lista)
@@ -874,6 +1247,20 @@ def adicionar_album_lista(lista_id):
 def remover_album_lista(lista_id, id_album):
     listas_col.update_one({"_id": ObjectId(lista_id)}, {"$pull": {"albuns": int(id_album)}})
     return jsonify({"message": "Álbum removido da lista!"}), 200
+
+@app.route('/api/listas/<lista_id>/faixas', methods=['POST'])
+def adicionar_faixa_lista(lista_id):
+    faixa = request.json.get("faixa")
+    listas_col.update_one(
+        {"_id": ObjectId(lista_id), "faixas.id": {"$ne": faixa["id"]}}, 
+        {"$push": {"faixas": faixa}}
+    )
+    return jsonify({"message": "Música adicionada à lista!"}), 200
+
+@app.route('/api/listas/<lista_id>/faixas/<int:id_faixa>', methods=['DELETE'])
+def remover_faixa_lista(lista_id, id_faixa):
+    listas_col.update_one({"_id": ObjectId(lista_id)}, {"$pull": {"faixas": {"id": id_faixa}}})
+    return jsonify({"message": "Música removida da lista!"}), 200
 
 
 # --- SISTEMA DE CHAT ---
@@ -974,6 +1361,85 @@ def marcar_mensagens_lidas(id_user, id_outro):
         {"id_remetente": id_outro, "id_destinatario": id_user, "lida": False},
         {"$set": {"lida": True}}
     )
+    return jsonify({"status": "sucesso"}), 200
+
+# --- TRACK RATINGS ---
+
+@app.route('/api/albuns/<int:id_album>/tracks/ratings', methods=['GET'])
+def get_track_ratings(id_album):
+    id_user = request.args.get('id_user', type=int)
+    
+    # calcula a nota media por faixa
+    pipeline = [
+        {"$match": {"id_album": id_album}},
+        {"$group": {"_id": "$id_track", "media": {"$avg": "$nota"}}}
+    ]
+    medias_cursor = track_ratings_col.aggregate(pipeline)
+    medias = {str(item["_id"]): round(item["media"], 1) for item in medias_cursor}
+    
+    # pega as notas q o user logado deu pra essas faixas (se aplicavel)
+    user_ratings = {}
+    if id_user:
+        user_cursor = track_ratings_col.find({"id_album": id_album, "id_user": id_user})
+        user_ratings = {str(r["id_track"]): r["nota"] for r in user_cursor}
+        
+    return jsonify({
+        "medias": medias,
+        "user_ratings": user_ratings
+    }), 200
+
+@app.route('/api/users/<int:id_user>/stats', methods=['GET'])
+def user_stats(id_user):
+    # Reviews de Álbuns
+    reviews = list(criticas_col.find({"id_user": id_user, "excluida": {"$ne": True}}))
+    total_albums = len(reviews)
+    avg_album_rating = sum(r.get('nota', 0) for r in reviews) / total_albums if total_albums > 0 else 0
+    
+    # Distribuição de Notas (Álbuns)
+    rating_distribution = {str(i / 2): 0 for i in range(1, 11)} # de 0.5 ate 5.0
+    for r in reviews:
+        nota = str(float(r.get('nota', 0)))
+        if nota in rating_distribution:
+            rating_distribution[nota] += 1
+            
+    # Artista Mais Ouvido
+    album_ids = [r['id_album'] for r in reviews]
+    albuns = list(albuns_col.find({"id_album": {"$in": album_ids}}))
+    artist_counts = {}
+    for a in albuns:
+        artist_counts[a.get('artist', 'Desconhecido')] = artist_counts.get(a.get('artist', 'Desconhecido'), 0) + 1
+        
+    top_artist = max(artist_counts, key=artist_counts.get) if artist_counts else "Nenhum"
+    
+    # Avaliações de Faixas (Track Ratings)
+    track_ratings = list(track_ratings_col.find({"id_user": id_user}))
+    total_tracks = len(track_ratings)
+    avg_track_rating = sum(t.get('nota', 0) for t in track_ratings) / total_tracks if total_tracks > 0 else 0
+    
+    return jsonify({
+        "total_albums": total_albums,
+        "avg_album_rating": round(avg_album_rating, 1),
+        "total_tracks": total_tracks,
+        "avg_track_rating": round(avg_track_rating, 1),
+        "top_artist": top_artist,
+        "rating_distribution": rating_distribution
+    }), 200
+
+@app.route('/api/albuns/<int:id_album>/tracks/<int:id_track>/rate', methods=['POST'])
+def rate_track(id_album, id_track):
+    data = request.json
+    id_user = data.get('id_user')
+    nota = data.get('nota')
+    
+    if not id_user or nota is None:
+        return jsonify({"error": "Dados inválidos"}), 400
+        
+    track_ratings_col.update_one(
+        {"id_user": id_user, "id_album": id_album, "id_track": id_track},
+        {"$set": {"nota": nota}},
+        upsert=True
+    )
+    
     return jsonify({"status": "sucesso"}), 200
 
 

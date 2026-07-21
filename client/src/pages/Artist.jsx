@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import AlbumCard from '../components/AlbumCard';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { BadgeCheck, User, Disc, Star, MapPin, Music } from 'lucide-react';
 
 export default function Artist() {
-  const { artistName } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
   
   const [artist, setArtist] = useState(null);
@@ -13,66 +14,48 @@ export default function Artist() {
   const [loading, setLoading] = useState(true);
   const [averageRating, setAverageRating] = useState(0);
 
-  const decodedName = decodeURIComponent(artistName);
-
-useEffect(() => {
+  useEffect(() => {
     setLoading(true);
-    fetch(`http://localhost:5000/api/busca?q=${encodeURIComponent(decodedName)}`)
+    fetch(`http://localhost:5000/api/artistas/${id}`)
       .then(res => res.json())
       .then(async data => {
-        const foundArtist = data.artistas.find(
-          a => a.name.toLowerCase() === decodedName.toLowerCase()
-        );
-
-        if (foundArtist) {
-          setArtist(foundArtist);
-
-          // filtra os álbuns do artista
-          const artistAlbumsRaw = data.albuns.filter(
-            a => a.id_artista === foundArtist.id_artista
-          );
-
-          // buscamos os detalhes de cada álbum pra pegar a nota real
-          const albumsWithRatings = await Promise.all(
-            artistAlbumsRaw.map(async (a) => {
-              try {
-                const res = await fetch(`http://localhost:5000/api/albuns/${a.id_album}`);
-                const albumDetail = await res.json();
-                return {
-                  id: a.id_album,
-                  title: a.title,
-                  artist: foundArtist.name,
-                  image: a.image,
-                  year: a.year,
-                  genre: a.genre,
-                  rating: albumDetail.nota_media || 0 
-                };
-              } catch {
-                return { ...a, id: a.id_album, artist: foundArtist.name, rating: 0 };
-              }
-            })
-          );
-
-          setAlbums(albumsWithRatings);
-
-          // Calcula a média geral do artista baseada na nota de cada álbum
-          if (albumsWithRatings.length > 0) {
-            const albumsWithReviews = albumsWithRatings.filter(a => a.rating > 0);
-            if (albumsWithReviews.length > 0) {
-              const total = albumsWithReviews.reduce((acc, curr) => acc + curr.rating, 0);
-              setAverageRating((total / albumsWithReviews.length).toFixed(1));
-            } else {
-              setAverageRating("0.0");
-            }
-          }
+        if (data.error) {
+          setLoading(false);
+          return;
         }
+
+        setArtist(data.artista);
+        setAverageRating(data.media_geral);
+
+        // busca as notas detalhadas de cada album desse artista
+        const albumsWithRatings = await Promise.all(
+          data.albuns.map(async (a) => {
+            try {
+              const res = await fetch(`http://localhost:5000/api/albuns/${a.id_album}`);
+              const albumDetail = await res.json();
+              return {
+                id: a.id_album,
+                title: a.title,
+                artist: data.artista.name,
+                image: a.image,
+                year: a.year,
+                genre: a.genre,
+                record_type: a.record_type || 'album',
+                rating: albumDetail.nota_media || 0 
+              };
+            } catch {
+              return { ...a, id: a.id_album, artist: data.artista.name, rating: 0 };
+            }
+          })
+        );
+        setAlbums(albumsWithRatings);
         setLoading(false);
       })
       .catch(err => {
         console.error("Erro ao buscar artista:", err);
         setLoading(false);
       });
-  }, [decodedName]);
+  }, [id]);
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#121215', color: 'white', paddingBottom: '80px', overflowX: 'hidden' }}>
       <Header hideNav={true} hideSearch={true} />
@@ -107,7 +90,7 @@ useEffect(() => {
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '40px 24px', position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '48px' }}>
         
         {loading ? (
-           <div style={{ textAlign: 'center', marginTop: '100px', color: '#9ca3af' }}>Carregando perfil...</div>
+          <LoadingSpinner fullScreen={false} />
         ) : artist ? (
           <>
             {/* === HEADER DO ARTISTA === */}
@@ -179,37 +162,98 @@ useEffect(() => {
               </div>
             </section>
 
-            {/* === DISCOGRAFIA === */}
-            <section style={{ marginTop: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-                <h2 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0 }}>Discografia</h2>
-                <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
-              </div>
-              
-              {albums.length > 0 ? (
-                <div 
-                  style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', 
-                    gap: '24px' 
-                  }}
-                >
-                  {albums.map(album => (
-                    <div 
-                      key={album.id} 
-                      onClick={() => navigate(`/album/${album.id}`)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <AlbumCard album={album} />
+            {/* === ÚLTIMO LANÇAMENTO === */}
+            {albums.length > 0 && (() => {
+                const sortedAlbums = [...albums].sort((a, b) => (b.year || "").toString().localeCompare((a.year || "").toString()));
+                const latest = sortedAlbums[0];
+                return (
+                  <section style={{ marginTop: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                      <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: 'white' }}>Último Lançamento</h2>
+                      <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ padding: '60px', textAlign: 'center', color: '#9ca3af', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
-                  Nenhum álbum encontrado para este artista.
-                </div>
-              )}
-            </section>
+                    
+                    <div 
+                      onClick={() => navigate(`/album/${latest.id}`)}
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '32px', 
+                        background: 'rgba(255,255,255,0.02)', 
+                        border: '1px solid rgba(255,255,255,0.05)', 
+                        borderRadius: '24px', 
+                        padding: '24px', 
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s, background 0.2s',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
+                    >
+                      <img src={latest.image} alt={latest.title} style={{ width: '180px', height: '180px', borderRadius: '16px', objectFit: 'cover', boxShadow: '0 15px 30px rgba(0,0,0,0.6)' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+                        <span style={{ fontSize: '12px', fontWeight: '800', background: 'white', color: 'black', padding: '4px 10px', borderRadius: '8px', alignSelf: 'flex-start', textTransform: 'uppercase', letterSpacing: '1px' }}>Novo</span>
+                        <h3 style={{ fontSize: '36px', fontWeight: '900', margin: 0, letterSpacing: '-1px', lineHeight: '1.1' }}>{latest.title}</h3>
+                        <p style={{ margin: 0, color: '#a1a1aa', fontSize: '16px', fontWeight: '500' }}>
+                           {latest.year ? new Date(latest.year).getFullYear() : 'Lançamento'} • {latest.genre || 'Álbum'}
+                           {latest.rating > 0 && <span style={{ color: '#facc15', marginLeft: '12px' }}>★ {latest.rating}</span>}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                );
+            })()}
+
+            {(() => {
+              const fullAlbums = albums.filter(a => a.record_type !== 'single');
+              const singlesEps = albums.filter(a => a.record_type === 'single');
+              
+              return (
+                <>
+                  {/* === DISCOGRAFIA (ÁLBUNS) === */}
+                  {fullAlbums.length > 0 && (
+                    <section style={{ marginTop: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                        <h2 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0 }}>Discografia</h2>
+                        <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '24px' }}>
+                        {fullAlbums.map(album => (
+                          <div key={album.id} onClick={() => navigate(`/album/${album.id}`)} style={{ cursor: 'pointer' }}>
+                            <AlbumCard album={album} />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* === SINGLES === */}
+                  {singlesEps.length > 0 && (
+                    <section style={{ marginTop: '48px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                        <h2 style={{ fontSize: '28px', fontWeight: 'bold', margin: 0 }}>Singles</h2>
+                        <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                      </div>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '24px' }}>
+                        {singlesEps.map(album => (
+                          <div key={album.id} onClick={() => navigate(`/album/${album.id}`)} style={{ cursor: 'pointer' }}>
+                            <AlbumCard album={album} />
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {albums.length === 0 && (
+                    <div style={{ marginTop: '16px', padding: '60px', textAlign: 'center', color: '#9ca3af', backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: '16px', border: '1px dashed rgba(255,255,255,0.1)' }}>
+                      Nenhum lançamento encontrado para este artista.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </>
         ) : (
           <div style={{ textAlign: 'center', marginTop: '100px' }}>

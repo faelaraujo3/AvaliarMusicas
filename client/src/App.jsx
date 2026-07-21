@@ -7,10 +7,14 @@ import Artist from './pages/Artist';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import AlbumList from './pages/AlbumList';
+import TrackList from './pages/TrackList';
 import Settings from './pages/Settings';
 import Feed from './pages/Feed';
+import ReviewThread from './pages/ReviewThread';
 import Playlist from './pages/Playlist';
 import ChatWidget from './components/ChatWidget';
+import GlobalPlayer from './components/GlobalPlayer';
+import { PlayerProvider } from './contexts/PlayerContext';
 import './App.css';
 
 function App() {
@@ -42,83 +46,94 @@ function App() {
 
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login onLogin={handleLogin} />} />
-        <Route path="/register" element={<Register />} />
+    <PlayerProvider>
+      <BrowserRouter>
+        <GlobalPlayer />
+        <Routes>
+          <Route path="/login" element={<Login onLogin={handleLogin} />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* Rotas que exigem login */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Home user={user} onLogout={handleLogout} />
-          </ProtectedRoute>
-        } />
+          {/* Rotas que exigem login */}
+          <Route path="/" element={
+            <ProtectedRoute>
+              <Home user={user} onLogout={handleLogout} />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Home user={user} onLogout={handleLogout} />
-          </ProtectedRoute>
-        } />
+          <Route path="/trending" element={
+            <ProtectedRoute>
+              <AlbumList title="Em Alta" apiEndpoint="/api/lista/em-alta" />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/trending" element={
-          <ProtectedRoute>
-            <AlbumList title="Em Alta" apiEndpoint="/api/lista/em-alta" />
-          </ProtectedRoute>
-        } />
+          <Route path="/trending-singles" element={
+            <ProtectedRoute>
+              <AlbumList title="Singles em Alta" apiEndpoint="/api/lista/singles-em-alta" />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/top-rated" element={
-          <ProtectedRoute>
-            <AlbumList title="Melhores Avaliações" apiEndpoint="/api/lista/melhores" />
-          </ProtectedRoute>
-        } />
+          <Route path="/top-tracks" element={
+            <ProtectedRoute>
+              <TrackList title="Faixas Mais Bem Avaliadas" apiEndpoint="/api/lista/melhores-faixas" />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/releases" element={
-          <ProtectedRoute>
-            <AlbumList title="Novos Lançamentos" apiEndpoint="/api/lista/lancamentos" />
-          </ProtectedRoute>
-        } />
+          <Route path="/top-rated" element={
+            <ProtectedRoute>
+              <AlbumList title="Melhores Avaliações" apiEndpoint="/api/lista/melhores" />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/profile" element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        } />
+          <Route path="/releases" element={
+            <ProtectedRoute>
+              <AlbumList title="Novos Lançamentos" apiEndpoint="/api/lista/lancamentos" />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/profile/:identifier" element={<Profile />} />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/playlist/:id" element={<Playlist />} />
+          <Route path="/profile/:identifier" element={<Profile />} />
 
-        <Route path="/album/:id" element={
-          <ProtectedRoute>
-            <Album />
-          </ProtectedRoute>
-        } />
+          <Route path="/playlist/:id" element={<Playlist />} />
 
-        <Route path="/artist/:artistName" element={
-          <ProtectedRoute>
-            <Artist />
-          </ProtectedRoute>
-        } />
+          <Route path="/album/:id" element={
+            <ProtectedRoute>
+              <Album />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/settings" element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        } />
+          <Route path="/artist/:id" element={
+            <ProtectedRoute>
+              <Artist />
+            </ProtectedRoute>
+          } />
 
-        <Route path="/feed" element={
-          <ProtectedRoute>
-            <Feed />
-          </ProtectedRoute>
-        } />
+          <Route path="/review/:id" element={
+            <ProtectedRoute>
+              <ReviewThread />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/feed" element={
+            <ProtectedRoute>
+              <Feed />
+            </ProtectedRoute>
+          } />
+        </Routes>
         
-
-      </Routes>
-
-      {/* Widget de chat flutuante — sempre montado, visível em todas as páginas */}
-      <ChatWidget />
-
-    </BrowserRouter>
+        <ChatWidget />
+      </BrowserRouter>
+    </PlayerProvider>
   );
 }
 

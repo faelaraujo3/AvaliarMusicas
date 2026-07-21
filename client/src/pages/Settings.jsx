@@ -66,7 +66,6 @@ export default function Settings() {
       
       setStatus({ type: 'success', message: 'Dados da conta atualizados com sucesso!' });
       if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
         login(data.user);
       }
     } catch (error) {
@@ -120,7 +119,6 @@ export default function Settings() {
       
       setStatus({ type: 'success', message: 'Preferências de notificação salvas!' });
       if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
         login(data.user);
       }
     } catch (error) {
